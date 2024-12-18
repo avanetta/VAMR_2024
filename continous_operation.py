@@ -130,7 +130,7 @@ class Continuous_operation:
             
             self.S['X'] = np.hstack((self.S['X'], new_landmarks)) if self.S['X'] is not None else np.array(new_landmarks).T
             self.S['P'] = np.hstack((self.S['P'], new_keypoints)) if self.S['P'] is not None else np.array(new_keypoints).T
-            old_pts = np.hstack((old_pts.T, new_keypoints)) if old_pts is not None else np.array(new_keypoints).T
+            #old_pts = np.hstack((old_pts.T, new_keypoints)) if old_pts is not None else np.array(new_keypoints).T
             next_pts = np.hstack((next_pts.T, new_keypoints)) if next_pts is not None else np.array(new_keypoints).T   
             old_pts = old_pts.T
             next_pts = next_pts.T
@@ -232,42 +232,48 @@ class Continuous_operation:
                 if new_keypoints.size > 0:
                     # Convert new keypoints to float32 for tracking
                     new_keypoints = new_keypoints.astype(np.float32).reshape(-1, 1, 2)
-
+                    """
                     # Perform KLT tracking for new keypoints
                     tracked_pts, status, _ = cv2.calcOpticalFlowPyrLK(curr_frame, curr_frame, new_keypoints, None)
                     valid = status.flatten() == 1
+                    if np.any(valid ==0):
+                        print("There is one none_valid Keypoint in the KLT from Current to Current")
+                    else:
+                        print("all Keypoints are valid")
                     tracked_pts = tracked_pts[valid]
                     new_keypoints = new_keypoints[valid]
-
+                    
                     # Perform RANSAC on the tracked keypoints
-                    if len(tracked_pts) >= 8:  # Minimum points for RANSAC
+                    if len(new_keypoints) >= 8:  # Minimum points for RANSAC
                         F, inlier_mask = cv2.findFundamentalMat(new_keypoints, tracked_pts, cv2.FM_RANSAC, 1.0, 0.99)
                         inlier_mask = inlier_mask.flatten() == 1
                         tracked_pts = tracked_pts[inlier_mask]
                         new_keypoints = new_keypoints[inlier_mask]
+                    """
 
-                        # Update candidates after RANSAC
-                        for kp in tracked_pts:
-                            self.S['C'] = (
-                                np.hstack((self.S['C'], kp.reshape(-1, 1))) if self.S['C'] is not None else kp.reshape(-1, 1)
-                            )
-                            self.S['F'] = (
-                                np.hstack((self.S['F'], kp.reshape(-1, 1))) if self.S['F'] is not None else kp.reshape(-1, 1)
-                            )
-                            new_poses = np.tile(T.reshape(-1, 1), (1, new_keypoints.shape[1]))
-                            self.S['T'] = (
-                                np.hstack((self.S['T'], new_poses))
-                                if self.S['T'] is not None
-                                else new_poses
-                            )
-                            # self.S['T'] = (
-                            #     np.hstack((self.S['T'], T.reshape(-1, 1))) if self.S['T'] is not None else T.reshape(-1, 1)
-                            # )
-                            self.S['R'] = (
-                                np.hstack((self.S['R'], kp.reshape(-1, 1))) if self.S['R'] is not None else kp.reshape(-1, 1)
-                            )
+                    # Update candidates after RANSAC
+                    for kp in new_keypoints:
+                        self.S['C'] = (
+                            np.hstack((self.S['C'], kp.reshape(-1, 1))) if self.S['C'] is not None else kp.reshape(-1, 1)
+                        )
+                        self.S['F'] = (
+                            np.hstack((self.S['F'], kp.reshape(-1, 1))) if self.S['F'] is not None else kp.reshape(-1, 1)
+                        )
+                        new_poses = np.tile(T.reshape(-1, 1), (1, new_keypoints.shape[1]))
+                        self.S['T'] = (
+                            np.hstack((self.S['T'], new_poses))
+                            if self.S['T'] is not None
+                            else new_poses
+                        )
+                        # self.S['T'] = (
+                        #     np.hstack((self.S['T'], T.reshape(-1, 1))) if self.S['T'] is not None else T.reshape(-1, 1)
+                        # )
+                        self.S['R'] = (
+                            np.hstack((self.S['R'], kp.reshape(-1, 1))) if self.S['R'] is not None else kp.reshape(-1, 1)
+                        )
 
         old_pts, next_pts = self.triangulate_new_landmarks(old_pts, next_pts, T)
+
 
         return self.S, old_pts, next_pts, T
 

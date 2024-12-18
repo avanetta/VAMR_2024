@@ -4,7 +4,7 @@ import cv2
 from continous_operation import Continuous_operation
 from matplotlib import pyplot as plt
 
-ds = 2  # 0: KITTI, 1: Malaga, 2: Parking
+ds = 0  # 0: KITTI, 1: Malaga, 2: Parking
 
 if ds == 0:
     # KITTI dataset setup
@@ -25,7 +25,7 @@ if ds == 0:
 #                   [0, 0, 1]])
 elif ds == 2:
     # Parking dataset setup
-    parking_path = "parking/parking"  # Specify the Parking dataset path
+    parking_path = "parking"  # Specify the Parking dataset path
     last_frame = 598
     #K = np.loadtxt(os.path.join(parking_path, "K.txt"))
     #K = np.genfromtxt(os.path.join(parking_path, "K.txt"), delimiter=",") 
@@ -107,7 +107,7 @@ for i in range(1, last_frame):
     T_total = T
     poses.append(T_total)
     
-    #""" 
+    
     # Plot keypoints and displacements
     fig, axes = plt.subplots(1, 2, figsize=(15, 8))
     landmarks_3D = continuous.S['X']
