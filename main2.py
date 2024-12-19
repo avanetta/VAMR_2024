@@ -14,25 +14,6 @@ if ds == 0:
     K = np.array([[718.856, 0, 607.1928],
                   [0, 718.856, 185.2157],
                   [0, 0, 1]])
-# elif ds == 1:
-#     # Malaga dataset setup
-#     malaga_path = "malaga-urban-dataset-extract-07/malaga-urban-dataset-extract-07"  # Specify the Malaga dataset path
-#     images_path = os.path.join(malaga_path, "malaga-urban-dataset-extract-07_rectified_800x600_Images")
-#     left_images = sorted([img for img in os.listdir(images_path) if img.endswith(".png")])[2::2]
-#     last_frame = len(left_images)
-#     K = np.array([[621.18428, 0, 404.0076],
-#                   [0, 621.18428, 309.05989],
-#                   [0, 0, 1]])
-elif ds == 2:
-    # Parking dataset setup
-    parking_path = "parking"  # Specify the Parking dataset path
-    last_frame = 598
-    #K = np.loadtxt(os.path.join(parking_path, "K.txt"))
-    #K = np.genfromtxt(os.path.join(parking_path, "K.txt"), delimiter=",") 
-    K= np.array([[331.37, 0.,      320.  ],
-        [  0.,      369.568,  240.    ],
-        [  0.,        0.,        1.    ]])
-    ground_truth = np.loadtxt(os.path.join(parking_path, "poses.txt"))[:, -8:]
 
 else:
     raise ValueError("Invalid dataset selection.")
@@ -42,14 +23,7 @@ else:
 p_W_landmarks = np.loadtxt(os.path.join(kitti_path, "p_W_landmarks.txt"), dtype = np.float32).T
 keypoints = np.loadtxt(os.path.join(kitti_path, "keypoints.txt"), dtype = np.float32)
 
-# num_random_points = 200
-# random_indices = np.random.choice(keypoints.shape[0], num_random_points, replace=False)
-# keypoints = keypoints[random_indices]
-
-keypoints[:, [0, 1]] = keypoints[:, [1, 0]]
-
-
-
+keypoints[:, [0, 1]] = keypoints[:, [1, 0]] # SEHER SEHR WICHTIG HAHA
 
 
 # Initialize the continuous operation class
@@ -67,16 +41,8 @@ if ds == 0:
     img1 = initial_frame
     img2 = cv2.imread(os.path.join(kitti_path, "05/image_01/000001.png"), cv2.IMREAD_GRAYSCALE)
 
-# if ds == 1:
-#     initial_frame = cv2.imread(os.path.join(malaga_path, "malaga-urban-dataset-extract-07_rectified_800x600_Images", left_images[0]), cv2.IMREAD_GRAYSCALE)
 
-if ds == 2:
-    initial_frame = cv2.imread(os.path.join(parking_path, "parking/images/00000.png"), cv2.IMREAD_GRAYSCALE)
-
-    img1 = initial_frame
-    img2 = cv2.imread(os.path.join(parking_path, "parking/images/00001.png"), cv2.IMREAD_GRAYSCALE)
-
-S, old_pts, next_pts, T = continuous.process_frame(img1, img2)
+S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img2)
 
 # continuous.plot_keypoints_and_displacements(img1, img2, old_pts, next_pts)
 last_frame = 199
@@ -92,28 +58,30 @@ poses = []
 poses.append(T_total)
 camera_trajectory = []
 camera_trajectory.append(T_total[:3, 3])
+
 # Start the loop from frame 2
 for i in range(1, last_frame):
     # Load the next frame
     if ds == 0:
         img2 = cv2.imread(os.path.join(kitti_path, "05/image_01/{:06d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
-    if ds == 2:
-        img2 = cv2.imread(os.path.join(parking_path, "parking/images/{:05d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
-
-    # Process the current frame to get tracked keypoints
-    S, old_pts, next_pts, T = continuous.process_frame(img1, img2)
+    
+    # Process the current frame to get tracked keypoints => Have a look at the "continuous operation" class
+    S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img2)
 
     # Maybe but not sure for global consistency
     T_total = T
     poses.append(T_total)
     
+    #""" 
+    # BIG PLOT FOR CAMERA TRAJECTORY VIDEO
+    # Idealerweise in eigene Funktion auslagern
     
     # Plot keypoints and displacements
     fig, axes = plt.subplots(1, 2, figsize=(15, 8))
     landmarks_3D = continuous.S['X']
 
-    camera_position = T_total[:3, 3]
-    x, z = camera_position[0], -camera_position[2]  # Use x and z for 2D plot
+    camera_position = pose[:3, 3]
+    x, z = camera_position[0], camera_position[2]  # Use x and z for 2D plot , HERE play with -1 etc...
 
     camera_trajectory.append((x, z))
 
@@ -182,7 +150,7 @@ for i in range(1, last_frame):
     video_writer.write(img_for_display)
 
     # Wait for 0.5 seconds (500 ms) before showing the next frame
-    if cv2.waitKey(100) & 0xFF == ord('q'):  # Wait 0.1 seconds
+    if cv2.waitKey(10) & 0xFF == ord('q'):  # Wait 0.1 seconds
         break
 
     # Set the current frame as the previous frame for the next iteration

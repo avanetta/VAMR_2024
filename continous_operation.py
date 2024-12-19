@@ -15,7 +15,7 @@ class Continuous_operation:
 
     def klt_tracking(self, prev_frame, curr_frame):
 
-        lk_params = dict(winSize=(21, 21), maxLevel=3,
+        lk_params = dict(winSize=(11, 11), maxLevel=2,
                          criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.1))
         old_pts = self.S['P'].T
         next_pts, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_frame, self.S['P'].T, None, **lk_params)
@@ -47,12 +47,16 @@ class Continuous_operation:
 
         return F, inlier_mask, next_pts, old_pts
     
+
     # Adding a pos estimation function, consisting of PnP and RANSAC:
     def pose_estimation_PnP_Ransac(self, next_pts):
 
         # PnP
-        landmarks_3D = self.S['X'].T
-        success, rvec, tvec, inliers = cv2.solvePnPRansac(landmarks_3D, next_pts, self.K, None)
+        landmarks_3D = self.S['X'].T  # Retrieve current 3D landmarks
+  
+        # Hier ist was falsch, weil dtvec negative Depth hat!!! Wie kläre ich das? 
+        success, rvec, tvec, inliers = cv2.solvePnPRansac(landmarks_3D, next_pts, self.K, None) 
+    
 
         # Convert rotation vector to rotation matrix
         R_actual, _ = cv2.Rodrigues(rvec)
@@ -61,12 +65,98 @@ class Continuous_operation:
         T_actual = np.eye(4)
         T_actual[:3, :3] = R_actual
         T_actual[:3, 3] = tvec.flatten()
+        # T_actual *= -1
+        Camera_pose = np.hstack((R_actual.T, -R_actual.T @ tvec.reshape(-1, 1)))
+        pose = Camera_pose
 
-        return T_actual, inliers
+        return T_actual, inliers, pose
     
-
     # Alles drüber is für PART 4.2
     # Hier DIE BAUSTELLE LEIDER NOCH NICHT FERTIG
+
+    def add_new_candidates(self, curr_frame, T):
+        new_keypoints = cv2.goodFeaturesToTrack(curr_frame, maxCorners=400, qualityLevel=0.01, minDistance=15)
+
+        if new_keypoints is not None:
+            new_keypoints = np.squeeze(new_keypoints, axis=1)  # Convert to Nx2 array
+
+            # Filter overlapping keypoints
+            current_keypoints = self.S['P'].T  # Existing keypoints
+            valid_new_keypoints = []
+            for kp in new_keypoints:
+                distances = np.linalg.norm(current_keypoints - kp, axis=1)
+                if np.min(distances) > 10:  # Minimum distance threshold
+                    valid_new_keypoints.append(kp)
+            new_keypoints = np.array(valid_new_keypoints)
+
+            # Add valid new keypoints to candidates
+            if new_keypoints.size > 0:
+                # Convert new keypoints to float32 for tracking
+                new_keypoints = new_keypoints.astype(np.float32).reshape(-1, 1, 2)
+                """
+                # Perform KLT tracking for new keypoints
+                tracked_pts, status, _ = cv2.calcOpticalFlowPyrLK(curr_frame, curr_frame, new_keypoints, None)
+                valid = status.flatten() == 1
+                tracked_pts = tracked_pts[valid]
+                new_keypoints = new_keypoints[valid]
+
+                # Perform RANSAC on the tracked keypoints
+                if len(tracked_pts) >= 8:  # Minimum points for RANSAC
+                    F, inlier_mask = cv2.findFundamentalMat(new_keypoints, tracked_pts, cv2.FM_RANSAC, 1.0, 0.99)
+                    inlier_mask = inlier_mask.flatten() == 1
+                    tracked_pts = tracked_pts[inlier_mask]
+                    new_keypoints = new_keypoints[inlier_mask]
+                """
+                    # Update candidates after RANSAC
+                # for kp in tracked_pts:
+                for kp in new_keypoints:
+                    self.S['C'] = (
+                        np.hstack((self.S['C'], kp.reshape(-1, 1))) if self.S['C'] is not None else kp.reshape(-1, 1)
+                    )
+                    self.S['F'] = (
+                        np.hstack((self.S['F'], kp.reshape(-1, 1))) if self.S['F'] is not None else kp.reshape(-1, 1)
+                    )
+                    new_poses = np.tile(T.reshape(-1, 1), (1, new_keypoints.shape[1]))
+                    self.S['T'] = (
+                        np.hstack((self.S['T'], new_poses))
+                        if self.S['T'] is not None
+                        else new_poses
+                    )
+                    
+                    self.S['R'] = (
+                        np.hstack((self.S['R'], kp.reshape(-1, 1))) if self.S['R'] is not None else kp.reshape(-1, 1)
+                    )
+
+
+    def KLT_for_new_candidates(self, past_frame, curr_frame):
+        # Track candidate keypoints
+            candidate_pts = self.S['C'].T  # Convert to Nx2 for tracking
+            tracked_pts, status, _ = cv2.calcOpticalFlowPyrLK(past_frame, curr_frame, candidate_pts, None)
+            
+            # Keep only successfully tracked candidates
+            valid = status.flatten() == 1
+            tracked_pts = tracked_pts[valid]
+            candidate_pts = candidate_pts[valid] # Important for Tracking!
+
+            self.S['F'] = self.S['F'][:, valid] if np.any(valid) else None
+            self.S['T'] = self.S['T'][:, valid] if np.any(valid) else None
+
+             # Perform RANSAC on the tracked keypoints
+            if len(tracked_pts) >= 8:  # Minimum points for RANSAC
+                F, inlier_mask = cv2.findFundamentalMat(candidate_pts, tracked_pts, cv2.FM_RANSAC, 1.0, 0.99)
+                inlier_mask = inlier_mask.flatten() == 1
+                tracked_pts = tracked_pts[inlier_mask]
+                candidate_pts = candidate_pts[inlier_mask]
+
+            # new_F = self.S['F'][:, inlier_mask] if np.any(inlier_mask) else None
+            # new_T = self.S['T'][:, inlier_mask] if np.any(inlier_mask) else None
+            self.S['C'] = tracked_pts.T if np.any(inlier_mask) else None
+            self.S['F'] = self.S['F'][:, inlier_mask] if np.any(inlier_mask) else None
+            self.S['T'] = self.S['T'][:, inlier_mask] if np.any(inlier_mask) else None
+            self.S['R'] = candidate_pts.T if np.any(inlier_mask) else None
+
+
+
     def triangulate_new_landmarks(self, old_pts, next_pts, T):
         """
         Triangulate new landmarks from candidate keypoints and their tracks.
@@ -90,6 +180,10 @@ class Continuous_operation:
             current_observation = self.S['C'][:, i]  # 2D keypoint (u, v)
             current_pose = T  # Current pose (projection matrix)
 
+            # print("First Pose: ", first_pose)
+            # print("Current Pose: ", current_pose)
+            # print("First Observation: ", first_observation)
+            # print("Current Observation: ", current_observation)
 
             P1 = self.K @ first_pose[:3]  # First projection matrix: K * [R|t] for the first pose
             P2 = self.K @ current_pose[:3]  # Second projection matrix: K * [R|t] for the current pose
@@ -109,10 +203,14 @@ class Continuous_operation:
                 # Triangulate using first and current observations
                 points_4d = cv2.triangulatePoints(P1, P2, first_observation.reshape(2, 1), current_observation.reshape(2, 1))
                 points_3d = points_4d[:3] / points_4d[3]  # Convert from homogeneous to 3D
+                if points_3d[2] > 0:  # Check if the depth is positive
+                    new_landmarks.append(points_3d)
+                    new_keypoints.append(current_observation)
+                    mask_to_keep[i] = False
 
-                new_landmarks.append(points_3d)
-                new_keypoints.append(current_observation)
-                mask_to_keep[i] = False
+                # new_landmarks.append(points_3d)
+                # new_keypoints.append(current_observation)
+                # mask_to_keep[i] = False
 
         # Update state with new landmarks and keypoints
         if new_landmarks:
@@ -130,7 +228,7 @@ class Continuous_operation:
             
             self.S['X'] = np.hstack((self.S['X'], new_landmarks)) if self.S['X'] is not None else np.array(new_landmarks).T
             self.S['P'] = np.hstack((self.S['P'], new_keypoints)) if self.S['P'] is not None else np.array(new_keypoints).T
-            #old_pts = np.hstack((old_pts.T, new_keypoints)) if old_pts is not None else np.array(new_keypoints).T
+            old_pts = np.hstack((old_pts.T, new_keypoints)) if old_pts is not None else np.array(new_keypoints).T
             next_pts = np.hstack((next_pts.T, new_keypoints)) if next_pts is not None else np.array(new_keypoints).T   
             old_pts = old_pts.T
             next_pts = next_pts.T
@@ -165,7 +263,7 @@ class Continuous_operation:
     
 
         # Estimate pose PART 4.2
-        T, inliers = self.pose_estimation_PnP_Ransac(next_pts)
+        T, inliers, pose = self.pose_estimation_PnP_Ransac(next_pts)
         inliers = inliers.flatten()
 
         selected_pts = next_pts[inliers]
@@ -183,99 +281,19 @@ class Continuous_operation:
         
         # if self.S['C'] is not None and self.S['C'].shape[1] > 0:
         if self.S['C'] is not None and self.S['C'].shape[1] > 50:
-            # Track candidate keypoints
-            candidate_pts = self.S['C'].T  # Convert to Nx2 for tracking
-            tracked_pts, status, _ = cv2.calcOpticalFlowPyrLK(past_frame, curr_frame, candidate_pts, None)
+
+            self.KLT_for_new_candidates(past_frame, curr_frame)
             
-            # Keep only successfully tracked candidates
-            valid = status.flatten() == 1
-            tracked_pts = tracked_pts[valid]
-            candidate_pts = candidate_pts[valid] # Important for Tracking!
-
-            self.S['F'] = self.S['F'][:, valid] if np.any(valid) else None
-            self.S['T'] = self.S['T'][:, valid] if np.any(valid) else None
-
-             # Perform RANSAC on the tracked keypoints
-            if len(tracked_pts) >= 8:  # Minimum points for RANSAC
-                F, inlier_mask = cv2.findFundamentalMat(candidate_pts, tracked_pts, cv2.FM_RANSAC, 1.0, 0.99)
-                inlier_mask = inlier_mask.flatten() == 1
-                tracked_pts = tracked_pts[inlier_mask]
-                candidate_pts = candidate_pts[inlier_mask]
-
-            # new_F = self.S['F'][:, inlier_mask] if np.any(inlier_mask) else None
-            # new_T = self.S['T'][:, inlier_mask] if np.any(inlier_mask) else None
-            self.S['C'] = tracked_pts.T if np.any(inlier_mask) else None
-            self.S['F'] = self.S['F'][:, inlier_mask] if np.any(inlier_mask) else None
-            self.S['T'] = self.S['T'][:, inlier_mask] if np.any(inlier_mask) else None
-            self.S['R'] = candidate_pts.T if np.any(inlier_mask) else None
-
-
 
             # Monitor keypoint count
         if self.S['P'].shape[1] < 300 and (self.S['C'] is None or self.S['C'].shape[1] < 100):  # Threshold for the minimum number of keypoints
             # Detect new keypoints using Shi-Tomasi (Good Features to Track)
-            new_keypoints = cv2.goodFeaturesToTrack(curr_frame, maxCorners=400, qualityLevel=0.01, minDistance=10)
-
-            if new_keypoints is not None:
-                new_keypoints = np.squeeze(new_keypoints, axis=1)  # Convert to Nx2 array
-
-                # Filter overlapping keypoints
-                current_keypoints = self.S['P'].T  # Existing keypoints
-                valid_new_keypoints = []
-                for kp in new_keypoints:
-                    distances = np.linalg.norm(current_keypoints - kp, axis=1)
-                    if np.min(distances) > 10:  # Minimum distance threshold
-                        valid_new_keypoints.append(kp)
-                new_keypoints = np.array(valid_new_keypoints)
-
-                # Add valid new keypoints to candidates
-                if new_keypoints.size > 0:
-                    # Convert new keypoints to float32 for tracking
-                    new_keypoints = new_keypoints.astype(np.float32).reshape(-1, 1, 2)
-                    """
-                    # Perform KLT tracking for new keypoints
-                    tracked_pts, status, _ = cv2.calcOpticalFlowPyrLK(curr_frame, curr_frame, new_keypoints, None)
-                    valid = status.flatten() == 1
-                    if np.any(valid ==0):
-                        print("There is one none_valid Keypoint in the KLT from Current to Current")
-                    else:
-                        print("all Keypoints are valid")
-                    tracked_pts = tracked_pts[valid]
-                    new_keypoints = new_keypoints[valid]
-                    
-                    # Perform RANSAC on the tracked keypoints
-                    if len(new_keypoints) >= 8:  # Minimum points for RANSAC
-                        F, inlier_mask = cv2.findFundamentalMat(new_keypoints, tracked_pts, cv2.FM_RANSAC, 1.0, 0.99)
-                        inlier_mask = inlier_mask.flatten() == 1
-                        tracked_pts = tracked_pts[inlier_mask]
-                        new_keypoints = new_keypoints[inlier_mask]
-                    """
-
-                    # Update candidates after RANSAC
-                    for kp in new_keypoints:
-                        self.S['C'] = (
-                            np.hstack((self.S['C'], kp.reshape(-1, 1))) if self.S['C'] is not None else kp.reshape(-1, 1)
-                        )
-                        self.S['F'] = (
-                            np.hstack((self.S['F'], kp.reshape(-1, 1))) if self.S['F'] is not None else kp.reshape(-1, 1)
-                        )
-                        new_poses = np.tile(T.reshape(-1, 1), (1, new_keypoints.shape[1]))
-                        self.S['T'] = (
-                            np.hstack((self.S['T'], new_poses))
-                            if self.S['T'] is not None
-                            else new_poses
-                        )
-                        # self.S['T'] = (
-                        #     np.hstack((self.S['T'], T.reshape(-1, 1))) if self.S['T'] is not None else T.reshape(-1, 1)
-                        # )
-                        self.S['R'] = (
-                            np.hstack((self.S['R'], kp.reshape(-1, 1))) if self.S['R'] is not None else kp.reshape(-1, 1)
-                        )
+            self.add_new_candidates(curr_frame, T)
+            
 
         old_pts, next_pts = self.triangulate_new_landmarks(old_pts, next_pts, T)
 
-
-        return self.S, old_pts, next_pts, T
+        return self.S, old_pts, next_pts, T, pose
 
 
 
