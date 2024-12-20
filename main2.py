@@ -30,13 +30,13 @@ if ds == 0:
 
 # if ds == 1:
 #     initial_frame = cv2.imread(os.path.join(malaga_path, "malaga-urban-dataset-extract-07_rectified_800x600_Images", left_images[0]), cv2.IMREAD_GRAYSCALE)
-
+"""
 if ds == 2:
     initial_frame = cv2.imread(os.path.join(parking_path, "parking/images/00000.png"), cv2.IMREAD_GRAYSCALE)
 
     img1 = initial_frame
     img2 = cv2.imread(os.path.join(parking_path, "parking/images/00002.png"), cv2.IMREAD_GRAYSCALE)
-
+"""
 # Initialize the continuous operation class
 continuous = Continuous_operation(K)
 
@@ -73,11 +73,12 @@ for i in range(2, last_frame):
     # Load the next frame
     if ds == 0:
         img2 = cv2.imread(os.path.join(kitti_path, "05/image_01/{:06d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
-    if ds == 2:
-        img2 = cv2.imread(os.path.join(parking_path, "parking/images/{:05d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
+
+    #if ds == 2:
+    #    img2 = cv2.imread(os.path.join(parking_path, "parking/images/{:05d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
     print(f"processing frame {i}")
     # Process the current frame to get tracked keypoints
-    S, old_pts, next_pts, T = continuous.process_frame(img1, img2)
+    S, old_pts, next_pts, T , pose = continuous.process_frame(img1, img2)
 
     # Maybe but not sure for global consistency
     T_total = T
