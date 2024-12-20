@@ -56,25 +56,19 @@ if ds == 2:
     img1 = initial_frame
     img2 = cv2.imread(os.path.join(parking_path, "parking/images/00002.png"), cv2.IMREAD_GRAYSCALE)
 
-
-keypoints, p_W_landmarks = initialization(img1,img3, K)
-print("landmarks shape_init", p_W_landmarks.shape)
-
-# num_random_points = 200
-# random_indices = np.random.choice(keypoints.shape[0], num_random_points, replace=False)
-# keypoints = keypoints[random_indices]
-
-keypoints[:, [0, 1]] = keypoints[:, [1, 0]]
-
-
 # Initialize the continuous operation class
 continuous = Continuous_operation(K)
+
+keypoints, p_W_landmarks = initialization(img1,img3, continuous)
+
+print("landmarks shape_init", p_W_landmarks.shape)
+
+keypoints[:, [0, 1]] = keypoints[:, [1, 0]]
 
 continuous.S['X'] = p_W_landmarks
 continuous.S['P'] = keypoints.T
 
 # continuous.plot_keypoints(initial_frame, initial_frame, continuous.S['P'], continuous.S['P'])
-
 
 S, old_pts, next_pts, T = continuous.process_frame(img1, img2)
 
@@ -99,7 +93,7 @@ for i in range(2, last_frame):
         img2 = cv2.imread(os.path.join(kitti_path, "05/image_01/{:06d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
     if ds == 2:
         img2 = cv2.imread(os.path.join(parking_path, "parking/images/{:05d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
-
+    print(f"processing frame {i}")
     # Process the current frame to get tracked keypoints
     S, old_pts, next_pts, T = continuous.process_frame(img1, img2)
 

@@ -17,13 +17,26 @@ class Continuous_operation:
 
         lk_params = dict(winSize=(21, 21), maxLevel=3,
                          criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.1))
-        old_pts = self.S['P'].T
+        old_pts = self.S['P'].T #keypoints 577x2
         next_pts, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_frame, self.S['P'].T, None, **lk_params)
+        """
+          DEBUG HELP
+          
+        print("next_pts shape", next_pts.shape)
+        old_pts[:, [0,1]] = old_pts[:,[1,0]]
+        next_pts[:,[0, 1]]= next_pts[:,[1,0]]
+        self.plot_keypoints_and_displacements(prev_frame, curr_frame, old_pts, next_pts)
 
+        old_pts[:, [0,1]] = old_pts[:,[1,0]]
+        next_pts[:,[0,1]]= next_pts[:,[1,0]]
+        """
         valid = status.flatten()==1
 
+        if np.all(valid == 0):
+            print("The 'valid' array is an array of zeros.")
+
         self.S['X'] = self.S['X'][:, valid]
-        self.S['P'] = self.S['P'][:, valid]
+        self.S['P'] = self.S['P'][:, valid] #landmarks
         # self.S['P'] = next_pts[valid].T
         old_pts = old_pts[valid]
         next_pts = next_pts[valid]
@@ -33,7 +46,8 @@ class Continuous_operation:
 
     # ADD RANSAC step to filter outliers:
     def ransac(self, next_pts, old_pts):
-
+        print("next_pts shape before RANSAC", next_pts.shape)
+        print("old_pts shape before RANSAC", old_pts.shape)
         F, inlier_mask = cv2.findFundamentalMat(old_pts, next_pts, cv2.FM_RANSAC, 1.0, 0.99)
         
         inlier_mask = inlier_mask.flatten() == 1
@@ -43,7 +57,8 @@ class Continuous_operation:
         self.S['P'] = next_pts[inlier_mask].T
         next_pts = next_pts[inlier_mask]
         old_pts = old_pts[inlier_mask]
-        
+        print("next_pts shape after RANSAC", next_pts.shape)
+        print("old_pts shape after RANSAC", old_pts.shape)
 
         return F, inlier_mask, next_pts, old_pts
     

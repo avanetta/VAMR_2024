@@ -3,59 +3,54 @@ import numpy as np
 import os #TODO Remove
 from scipy.spatial.transform import Rotation as R
 from matplotlib import pyplot as plt
+from continous_operation import Continuous_operation #TODO REMOVE
 
 
-def initialization(img1, img2, K):
-    #Tunable Paramters
-    number_matches = 600 #it selects the number_matches best matches to go on
+def initialization(img1, img2, self):
 
-    
-    # Step 1: Detect keypoints and descriptors using SIFT
-    sift = cv2.SIFT_create()
-    kp1, des1 = sift.detectAndCompute(img1, None)
-    kp2, des2 = sift.detectAndCompute(img2, None)
+    # Parameters
+    number_matches = 600  # it selects the number_matches best matches to go on
 
-    # Step 2: Match features using BFMatcher with Lowe's ratio test
-    bf = cv2.BFMatcher()
-    matches = bf.knnMatch(des1, des2, k=2)
+    # Step 1: Detect keypoints in the first image using goodFeaturesToTrack
+    feature_params = dict(maxCorners=number_matches, qualityLevel=0.01, minDistance=10)
+    kp1 = cv2.goodFeaturesToTrack(img1, mask=None, **feature_params)
 
-    # Apply Lowe's ratio test
-    good_matches = [m for m, n in matches if m.distance < 0.75 * n.distance]
+    # Ensure keypoints are in the correct shape
+    kp1 = np.float32(kp1).reshape(-1, 1, 2)
 
-    print("Good matches size", len(good_matches))
+    # Step 2: Track keypoints in the second image using calcOpticalFlowPyrLK
+    lk_params = dict(winSize=(21, 21), maxLevel=3, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.1))
+    kp2, st, err = cv2.calcOpticalFlowPyrLK(img1, img2, kp1, None, **lk_params)
 
-    # Select top `number_matches` best matches
-    best_matches = sorted(good_matches, key=lambda x: x.distance)[:number_matches]
+    # Select good points
+    good_new = kp2[st == 1]
+    good_old = kp1[st == 1]
 
-    # Step 3: Extract matched points
-    src_pts = np.float32([kp1[m.queryIdx].pt for m in best_matches])
-    dst_pts = np.float32([kp2[m.trainIdx].pt for m in best_matches])
-    
-    print("src_pts shape", src_pts.shape)
-    print("dst_pts shape", dst_pts.shape)
-    if np.all(src_pts == dst_pts):
-        print("src_pts == dst_points !!!!!")
-    #print("src_points", src_pts)
+    # Extract matched points
+    src_pts = np.float32(good_old).reshape(-1, 2)
+    dst_pts = np.float32(good_new).reshape(-1, 2)
+
+    #print("src_pts shape", src_pts.shape)
+    #print("dst_pts shape", dst_pts.shape)
+
     #define that the first pose is the identity matrix
+
     first_pose= np.eye(4)
     first_pose = first_pose[:3,:]
+    first_pose = self.K @ first_pose
     #Step 4: Use RANSAC with Fundamental Matrix
     if src_pts.shape[0] >= 8:  # Minimum points for RANSAC
         F, mask = cv2.findFundamentalMat(src_pts, dst_pts, cv2.FM_RANSAC, 1.0, 0.99)
         matches_mask = mask.ravel()
-        print("matches_mask shape", matches_mask.shape)
-        if 0 in matches_mask:
-            print("There is a 0 in matches_mask")
-        elif 0 in mask:
-            print("ERROR WHILE UNRAVELING") 
 
-        E = K.T @ F @ K
+        E = self.K.T @ F @ self.K
 
         keypoints = src_pts[matches_mask.astype(bool),:]
         keypoints = keypoints.reshape(keypoints.shape[0], 2)
-        print("Keypoints_init shape", keypoints.shape)
+        #print("Keypoints_init shape", keypoints.shape)
         dst_pts = dst_pts[matches_mask.astype(bool), :]
         dst_pts = dst_pts.reshape(dst_pts.shape[0],2)
+        #print("dst_pts shape", dst_pts.shape)
 
 
         _, R, t, _ = cv2.recoverPose(E, keypoints, dst_pts)
@@ -64,13 +59,16 @@ def initialization(img1, img2, K):
         second_pose[:3, :3] = R
         second_pose[:3, 3] = t.ravel()
         second_pose = second_pose[:3,:]
+        second_pose = self.K @ second_pose
+
+        #print(f"first_pose shape {first_pose.shape} second_pose shape {second_pose.shape}")
         # Step 6: Triangulate 3D points
-        points_4D = cv2.triangulatePoints(first_pose, second_pose, keypoints.T, dst_pts.T).T
-        np.savetxt('points_4d.txt', points_4D, fmt='%.6f', delimiter=' ')
-        print("4d Points shape", points_4D.shape)
-        points_3D = points_4D[:, :3] / points_4D[:, 3].reshape(-1,1)
-        points_3D = points_3D.T
-        print("3D Points shape:", points_3D.shape)
+        points_4D = cv2.triangulatePoints(first_pose, second_pose, keypoints.T, dst_pts.T)
+        #np.savetxt('points_4d.txt', points_4D, fmt='%.6f', delimiter=' ')
+        #print("4d Points shape", points_4D.shape)
+        points_3D = points_4D[:3,:] / points_4D[3, :]
+        points_3D = -points_3D
+        #print("3D Points shape:", points_3D.shape)
 
 
 
@@ -78,6 +76,7 @@ def initialization(img1, img2, K):
         matches_mask = None
         raise ValueError("Not enough source_points")
     
+    """
     #####  DEBUG HELP ######
     np.savetxt('points_3d.txt', points_3D.T, fmt='%.6f', delimiter=' ')
     kitti_path =  "kitti05/kitti"
@@ -112,7 +111,7 @@ def initialization(img1, img2, K):
 
     # Assuming keypoints (Nx2) and keypoints_truth (Mx2) are defined
     tolerance = 2
-    tolerance_land =145
+    tolerance_land =1
 
     # Compute pairwise differences between all rows in keypoints_truth and keypoints
     diff_key = np.abs(keypoints_truth[:, np.newaxis, :] - keypoints[np.newaxis, :, :])
@@ -135,5 +134,5 @@ def initialization(img1, img2, K):
     print(f"Number of approximately matching keypoints: {count_key}")
     print(f"Number of approximately matching landmarks: {count_land}")
 
-
+"""
     return keypoints, points_3D
