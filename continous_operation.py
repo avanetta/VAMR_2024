@@ -130,7 +130,7 @@ class Continuous_operation:
             
             self.S['X'] = np.hstack((self.S['X'], new_landmarks)) if self.S['X'] is not None else np.array(new_landmarks).T
             self.S['P'] = np.hstack((self.S['P'], new_keypoints)) if self.S['P'] is not None else np.array(new_keypoints).T
-            #old_pts = np.hstack((old_pts.T, new_keypoints)) if old_pts is not None else np.array(new_keypoints).T
+            old_pts = np.hstack((old_pts.T, new_keypoints)) if old_pts is not None else np.array(new_keypoints).T
             next_pts = np.hstack((next_pts.T, new_keypoints)) if next_pts is not None else np.array(new_keypoints).T   
             old_pts = old_pts.T
             next_pts = next_pts.T

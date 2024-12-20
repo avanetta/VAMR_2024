@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 from continous_operation import Continuous_operation
 from matplotlib import pyplot as plt
+from initialization import initialization
 
 ds = 0  # 0: KITTI, 1: Malaga, 2: Parking
 
@@ -38,18 +39,32 @@ else:
     raise ValueError("Invalid dataset selection.")
 
 
-# Load Kitti p_W_landmarks and keypoints.txt
-p_W_landmarks = np.loadtxt(os.path.join(kitti_path, "p_W_landmarks.txt"), dtype = np.float32).T
-keypoints = np.loadtxt(os.path.join(kitti_path, "keypoints.txt"), dtype = np.float32)
+if ds == 0:
+    # Show keypoints in frame 1 and 2
+    initial_frame = cv2.imread(os.path.join(kitti_path, "05/image_01/000000.png"), cv2.IMREAD_GRAYSCALE)
+
+    img1 = initial_frame
+    img2 = cv2.imread(os.path.join(kitti_path, "05/image_01/000001.png"), cv2.IMREAD_GRAYSCALE)
+    img3= cv2.imread(os.path.join(kitti_path, "05/image_01/000002.png"), cv2.IMREAD_GRAYSCALE)
+
+# if ds == 1:
+#     initial_frame = cv2.imread(os.path.join(malaga_path, "malaga-urban-dataset-extract-07_rectified_800x600_Images", left_images[0]), cv2.IMREAD_GRAYSCALE)
+
+if ds == 2:
+    initial_frame = cv2.imread(os.path.join(parking_path, "parking/images/00000.png"), cv2.IMREAD_GRAYSCALE)
+
+    img1 = initial_frame
+    img2 = cv2.imread(os.path.join(parking_path, "parking/images/00002.png"), cv2.IMREAD_GRAYSCALE)
+
+
+keypoints, p_W_landmarks = initialization(img1,img3, K)
+print("landmarks shape_init", p_W_landmarks.shape)
 
 # num_random_points = 200
 # random_indices = np.random.choice(keypoints.shape[0], num_random_points, replace=False)
 # keypoints = keypoints[random_indices]
 
 keypoints[:, [0, 1]] = keypoints[:, [1, 0]]
-
-
-
 
 
 # Initialize the continuous operation class
@@ -60,21 +75,6 @@ continuous.S['P'] = keypoints.T
 
 # continuous.plot_keypoints(initial_frame, initial_frame, continuous.S['P'], continuous.S['P'])
 
-if ds == 0:
-    # Show keypoints in frame 1 and 2
-    initial_frame = cv2.imread(os.path.join(kitti_path, "05/image_01/000000.png"), cv2.IMREAD_GRAYSCALE)
-
-    img1 = initial_frame
-    img2 = cv2.imread(os.path.join(kitti_path, "05/image_01/000001.png"), cv2.IMREAD_GRAYSCALE)
-
-# if ds == 1:
-#     initial_frame = cv2.imread(os.path.join(malaga_path, "malaga-urban-dataset-extract-07_rectified_800x600_Images", left_images[0]), cv2.IMREAD_GRAYSCALE)
-
-if ds == 2:
-    initial_frame = cv2.imread(os.path.join(parking_path, "parking/images/00000.png"), cv2.IMREAD_GRAYSCALE)
-
-    img1 = initial_frame
-    img2 = cv2.imread(os.path.join(parking_path, "parking/images/00001.png"), cv2.IMREAD_GRAYSCALE)
 
 S, old_pts, next_pts, T = continuous.process_frame(img1, img2)
 
@@ -93,7 +93,7 @@ poses.append(T_total)
 camera_trajectory = []
 camera_trajectory.append(T_total[:3, 3])
 # Start the loop from frame 2
-for i in range(1, last_frame):
+for i in range(2, last_frame):
     # Load the next frame
     if ds == 0:
         img2 = cv2.imread(os.path.join(kitti_path, "05/image_01/{:06d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
@@ -181,7 +181,7 @@ for i in range(1, last_frame):
 
     video_writer.write(img_for_display)
 
-    # Wait for 0.5 seconds (500 ms) before showing the next frame
+    #Wait for 0.5 seconds (500 ms) before showing the next frame
     if cv2.waitKey(100) & 0xFF == ord('q'):  # Wait 0.1 seconds
         break
 
