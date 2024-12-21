@@ -46,8 +46,8 @@ class Continuous_operation:
 
     # ADD RANSAC step to filter outliers:
     def ransac(self, next_pts, old_pts):
-        print("next_pts shape before RANSAC", next_pts.shape)
-        print("old_pts shape before RANSAC", old_pts.shape)
+        #print("next_pts shape before RANSAC", next_pts.shape)
+        #print("old_pts shape before RANSAC", old_pts.shape)
         F, inlier_mask = cv2.findFundamentalMat(old_pts, next_pts, cv2.FM_RANSAC, 1.0, 0.99)
         
         inlier_mask = inlier_mask.flatten() == 1
@@ -57,8 +57,8 @@ class Continuous_operation:
         self.S['P'] = next_pts[inlier_mask].T
         next_pts = next_pts[inlier_mask]
         old_pts = old_pts[inlier_mask]
-        print("next_pts shape after RANSAC", next_pts.shape)
-        print("old_pts shape after RANSAC", old_pts.shape)
+        #print("next_pts shape after RANSAC", next_pts.shape)
+        #print("old_pts shape after RANSAC", old_pts.shape)
 
         return F, inlier_mask, next_pts, old_pts
     
@@ -90,7 +90,7 @@ class Continuous_operation:
     # Hier DIE BAUSTELLE LEIDER NOCH NICHT FERTIG
 
     def add_new_candidates(self, curr_frame, T):
-        new_keypoints = cv2.goodFeaturesToTrack(curr_frame, maxCorners=400, qualityLevel=0.01, minDistance=15)
+        new_keypoints = cv2.goodFeaturesToTrack(curr_frame, maxCorners=400, qualityLevel=0.015, minDistance=18)
 
         if new_keypoints is not None:
             new_keypoints = np.squeeze(new_keypoints, axis=1)  # Convert to Nx2 array

@@ -6,13 +6,13 @@ from matplotlib import pyplot as plt
 from continous_operation import Continuous_operation #TODO REMOVE
 
 
-def initialization(img1, img2, self):
+def initialization(img1, img2, img3, self):
 
     # Parameters
-    number_matches = 600  # it selects the number_matches best matches to go on
+    number_matches = 1000  # it selects the number_matches best matches to go on
 
     # Step 1: Detect keypoints in the first image using goodFeaturesToTrack
-    feature_params = dict(maxCorners=number_matches, qualityLevel=0.01, minDistance=10)
+    feature_params = dict(maxCorners=number_matches, qualityLevel=0.015, minDistance=17)
     kp1 = cv2.goodFeaturesToTrack(img1, mask=None, **feature_params)
 
     # Ensure keypoints are in the correct shape
@@ -20,15 +20,25 @@ def initialization(img1, img2, self):
 
     # Step 2: Track keypoints in the second image using calcOpticalFlowPyrLK
     lk_params = dict(winSize=(21, 21), maxLevel=3, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.1))
-    kp2, st, err = cv2.calcOpticalFlowPyrLK(img1, img2, kp1, None, **lk_params)
-
+    kp2, st1, err1 = cv2.calcOpticalFlowPyrLK(img1, img2, kp1, None, **lk_params)
+    
+    
     # Select good points
-    good_new = kp2[st == 1]
-    good_old = kp1[st == 1]
+    good_kp2 = kp2[st1 == 1]
+    good_kp1 = kp1[st1 == 1]
+
+    # Step 3: Track keypoints from img2 to img3 using calcOpticalFlowPyrLK
+    kp3, st2, err2 = cv2.calcOpticalFlowPyrLK(img2, img3, good_kp2, None, **lk_params)
+
+    # Select good points tracked from img2 to img3
+    good_kp3 = kp3[st2.flatten() == 1]
+    good_kp2 = good_kp2[st2.flatten() == 1]
+    good_kp1 = good_kp1[st2.flatten() == 1]
 
     # Extract matched points
-    src_pts = np.float32(good_old).reshape(-1, 2)
-    dst_pts = np.float32(good_new).reshape(-1, 2)
+    src_pts = np.float32(good_kp1).reshape(-1, 2)
+    mid_pts = np.float32(good_kp2).reshape(-1, 2)
+    dst_pts = np.float32(good_kp3).reshape(-1, 2)
 
     #print("src_pts shape", src_pts.shape)
     #print("dst_pts shape", dst_pts.shape)
@@ -47,7 +57,7 @@ def initialization(img1, img2, self):
 
         keypoints = src_pts[matches_mask.astype(bool),:]
         keypoints = keypoints.reshape(keypoints.shape[0], 2)
-        #print("Keypoints_init shape", keypoints.shape)
+        print("Keypoints_init shape", keypoints.shape)
         dst_pts = dst_pts[matches_mask.astype(bool), :]
         dst_pts = dst_pts.reshape(dst_pts.shape[0],2)
         #print("dst_pts shape", dst_pts.shape)
@@ -78,7 +88,7 @@ def initialization(img1, img2, self):
     
     """
     #####  DEBUG HELP ######
-    np.savetxt('points_3d.txt', points_3D.T, fmt='%.6f', delimiter=' ')
+    #np.savetxt('points_3d.txt', points_3D.T, fmt='%.6f', delimiter=' ')
     kitti_path =  "kitti05/kitti"
     ## Load Kitti p_W_landmarks and keypoints.txt
     p_W_landmarks_truth = np.loadtxt(os.path.join(kitti_path, "p_W_landmarks.txt"), dtype = np.float32).T
@@ -134,5 +144,6 @@ def initialization(img1, img2, self):
     print(f"Number of approximately matching keypoints: {count_key}")
     print(f"Number of approximately matching landmarks: {count_land}")
 
-"""
+    """
+
     return keypoints.T, points_3D
