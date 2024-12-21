@@ -135,4 +135,4 @@ def initialization(img1, img2, self):
     print(f"Number of approximately matching landmarks: {count_land}")
 
 """
-    return keypoints, points_3D
+    return keypoints.T, points_3D
