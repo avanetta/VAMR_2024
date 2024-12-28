@@ -2,27 +2,34 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 
-def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, frame_index):
+def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, frame_index, gt_matrices, gt_trajectory):
     # Plot keypoints and displacements
     fig, axes = plt.subplots(1, 2, figsize=(15, 8))
     landmarks_3D = continuous.S['X']
 
     camera_position = pose[:3, 3]
     x, z = camera_position[0], camera_position[2]  # Use x and z for 2D plot
-
     camera_trajectory.append((x, z))
+
+    gt_position = gt_matrices[frame_index][:3, 3]
+    x_gt, z_gt = gt_position[0], gt_position[2]
+    gt_trajectory.append((x_gt, z_gt))
 
     # Project landmarks onto the x-z plane
     x_landmarks = landmarks_3D[0, :]
     z_landmarks = landmarks_3D[2, :]
     num_landmarks = landmarks_3D.shape[1]
 
-    axes[0].scatter(x_landmarks, z_landmarks, c='blue', s=2, label=f"Landmarks (3D): {num_landmarks}")
+    axes[0].scatter(x_landmarks, z_landmarks, color='blue', s=2, label=f"Landmarks (3D): {num_landmarks}")
     axes[0].plot(x, z, 'ro', markersize=8, label="Camera Pose")
+    axes[0].plot(x_gt, z_gt, 'go', markersize=8, label="GT Pose")
 
     # Plot the entire trajectory of the camera as a line (iterative update)
     trajectory_x, trajectory_z = zip(*camera_trajectory)  # Unzip the trajectory list
-    axes[0].plot(trajectory_x, trajectory_z, 'b-', alpha=0.5, label="Camera Trajectory")
+    traj_gt_x, traj_gt_z = zip(*gt_trajectory)
+
+    axes[0].plot(trajectory_x, trajectory_z, 'r-', alpha=0.5, label="Camera Trajectory")
+    axes[0].plot(traj_gt_x, traj_gt_z, 'g-', alpha=0.5, label="GT Trajectory")
 
     axes[0].set_title(f"2D Trajectory and Landmarks of frame {frame_index}")
     axes[0].set_xlabel("X (meters)")
@@ -32,8 +39,8 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     axes[0].axis('equal')  # Equal scaling for x and z
 
     # Ensure consistent x-y axis limits
-    axes[0].set_xlim([-150, 150])  # Adjust limits as needed for your dataset
-    axes[0].set_ylim([-10, 300])  # Adjust limits as needed for your dataset
+    axes[0].set_xlim([-500, 500])  # Adjust limits as needed for your dataset
+    axes[0].set_ylim([-100, 900])  # Adjust limits as needed for your dataset
 
     # Second frame with displacements
     axes[1].imshow(img2, cmap='gray')
