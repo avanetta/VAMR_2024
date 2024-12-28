@@ -66,11 +66,23 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     img_for_display = img_for_display.reshape(fig.canvas.get_width_height()[::-1] + (4,))
     img_for_display = img_for_display[:, :, :3]
 
-    # Show the frame in a window
-    cv2.imshow('Keypoints and Displacements', img_for_display)
-    video_writer.write(img_for_display)
+    # Save the frame to a file
+    cv2.imwrite(f'frame_{frame_index:06d}.png', img_for_display)
 
-    # Wait for 0.1 seconds before showing the next frame
-    if cv2.waitKey(10) & 0xFF == ord('q'):
-        return False
-    return True
+    ## Show the frame in a window
+    #cv2.imshow('Keypoints and Displacements', img_for_display)
+    #video_writer.write(img_for_display)
+#
+    ## Wait for 0.1 seconds before showing the next frame
+    #if cv2.waitKey(10) & 0xFF == ord('q'):
+    #    return False
+    #return True
+
+def display_video(video_writer, last_frame):
+    for i in range(1, last_frame):
+        img_for_display = cv2.imread(f'frame_{i:06d}.png')
+        cv2.imshow('Keypoints and Displacements', img_for_display)
+        video_writer.write(img_for_display)
+        if cv2.waitKey(10) & 0xFF == ord('q'):
+            break
+    cv2.destroyAllWindows()

@@ -6,13 +6,22 @@ from matplotlib import pyplot as plt
 from continous_operation import Continuous_operation #TODO REMOVE
 
 
-def initialization(img1, img2, img3, self):
+def initialization(img1, img2, img3, ds,  self):
+    if ds== 0:
+        # Parameters
+        number_matches = 1000  # it selects the number_matches best matches to go on
+        feature_params = dict(maxCorners=number_matches, qualityLevel=0.015, minDistance=17)
 
-    # Parameters
-    number_matches = 1000  # it selects the number_matches best matches to go on
-
+    elif ds == 1:
+        # Parameters
+        number_matches = 1000
+        feature_params = dict(maxCorners=number_matches, qualityLevel=0.01, minDistance=10)
+    elif ds == 2:
+        # Parameters
+        number_matches = 1000
+        feature_params = dict(maxCorners=number_matches, qualityLevel=0.01, minDistance=10)
     # Step 1: Detect keypoints in the first image using goodFeaturesToTrack
-    feature_params = dict(maxCorners=number_matches, qualityLevel=0.015, minDistance=17)
+    
     kp1 = cv2.goodFeaturesToTrack(img1, mask=None, **feature_params)
 
     # Ensure keypoints are in the correct shape
