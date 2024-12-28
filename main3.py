@@ -9,7 +9,7 @@ from multiprocessing import Pool
 import threading
 
 def main():
-    ds = 2 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
+    ds = 1 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
 
     if ds == 0:
         # KITTI dataset setup with given intialization
@@ -21,35 +21,8 @@ def main():
         K = np.array([[718.856, 0, 607.1928],
                       [0, 718.856, 185.2157],
                       [0, 0, 1]])
-        initial_frame = cv2.imread(os.path.join(kitti_path, "05/image_01/000000.png"), cv2.IMREAD_GRAYSCALE)
-
-    if ds == 1:
-        # KITTI dataset setup with implemented initialization
-        kitti_path = "kitti05/kitti"  # Specify the KITTI dataset path
-        ground_truth = np.loadtxt(os.path.join(kitti_path, "poses/05.txt"))  # 05.txt goes with image_0, 
-        print(ground_truth.shape)
-        gt_matrices = ground_truth.reshape(-1, 3, 4)
-        print(gt_matrices.shape)
-        last_frame = 2761
-        K = np.array([[718.856, 0, 607.1928],
-                      [0, 718.856, 185.2157],
-                      [0, 0, 1]])
-        
-    if ds == 3:
-        parking_path = "parking"  # Specify the KITTI dataset path
-        ground_truth = np.loadtxt(os.path.join(parking_path, "poses.txt"))
-        gt_matrices = ground_truth.reshape(-1, 3, 4)
-        last_frame = 599
-        K = np.array([[331.37, 0, 320],
-                      [0, 369.568, 240],
-                      [0, 0, 1]])
-
-    # else:
-    #     raise ValueError("Invalid dataset selection.")
-
-    if ds == 0: # This is KITTI with given p_W_landmarks and keypoints.txt
-        # Show keypoints in frame 1 and 2
         initial_frame = cv2.imread(os.path.join(kitti_path, "05/image_0/000000.png"), cv2.IMREAD_GRAYSCALE)
+        
         last_frame = 2761
 
         img1 = initial_frame
@@ -65,33 +38,38 @@ def main():
 
         print("Keypoints_init shape", keypoints.shape)
         print("landmarks shape_init", p_W_landmarks.shape)
-          
 
-    if ds == 1: # KITTTI with initialization
-        initial_frame = cv2.imread(os.path.join(kitti_path, "05/image_0/000000.png"), cv2.IMREAD_GRAYSCALE)
+    if ds == 1:
+        # KITTI dataset setup with implemented initialization
+        kitti_path = "kitti05/kitti"  # Specify the KITTI dataset path
+        ground_truth = np.loadtxt(os.path.join(kitti_path, "poses/05.txt"))  # 05.txt goes with image_0, 
+        print(ground_truth.shape)
+        gt_matrices = ground_truth.reshape(-1, 3, 4)
+        print(gt_matrices.shape)
         last_frame = 2761
+        K = np.array([[718.856, 0, 607.1928],
+                      [0, 718.856, 185.2157],
+                      [0, 0, 1]])
+        
+        last_frame = 2761
+        initial_frame = cv2.imread(os.path.join(kitti_path, "05/image_0/000000.png"), cv2.IMREAD_GRAYSCALE)
 
         img1 = initial_frame
         img2 = cv2.imread(os.path.join(kitti_path, "05/image_0/000001.png"), cv2.IMREAD_GRAYSCALE)
         img3= cv2.imread(os.path.join(kitti_path, "05/image_0/000002.png"), cv2.IMREAD_GRAYSCALE)
-
+        if img1 is None or img2 is None or img3 is None:
+            raise ValueError("One or more images could not be loaded.")
+        
+        
+        # Ensure both images are the same size and type
+        if img1.shape != img2.shape:
+            raise ValueError("Input images must have the same dimensions")
+    
         # Initialize the continuous operation class
         continuous = Continuous_operation(K)
-        keypoints,p_W_landmarks = initialization(img1, img2, img3, continuous)
+        keypoints,p_W_landmarks = initialization(img1, img2, img3, ds,  continuous)
         print("landmarks shape_init", p_W_landmarks.shape)
-    
-    if ds == 3:
-        initial_frame = cv2.imread(os.path.join(parking_path, "images/img_00000.png"), cv2.IMREAD_GRAYSCALE)
-        last_frame = 599
-
-        img1 = initial_frame
-        img2 = cv2.imread(os.path.join(parking_path, "images/img_00001.png"), cv2.IMREAD_GRAYSCALE)
-        img3= cv2.imread(os.path.join(parking_path, "images/img_00002.png"), cv2.IMREAD_GRAYSCALE)
-
-        #p_W_landmarks = np.loadtxt(os.path.join(kitti_path, "p_W_landmarks.txt"), dtype = np.float32).T
-        #keypoints = np.loadtxt(os.path.join(kitti_path, "keypoints.txt"), dtype = np.float32)
-
-    elif ds == 1:
+    if ds == 2:
         # Malaga dataset setup
         malaga_path = "malaga"  # Specify the Malaga dataset path
         
@@ -116,26 +94,28 @@ def main():
         # Optionally, check if the images were loaded correctly
         if img1 is None or img2 is None or img3 is None:
             raise ValueError("One or more images could not be loaded.")
+        continuous = Continuous_operation(K)
+        keypoints,p_W_landmarks = initialization(img1, img2, img3, ds,  continuous)
+        print("landmarks shape_init", p_W_landmarks.shape)
 
+            
+    if ds == 3:
+        parking_path = "parking"  # Specify the KITTI dataset path
+        ground_truth = np.loadtxt(os.path.join(parking_path, "poses.txt"))
+        gt_matrices = ground_truth.reshape(-1, 3, 4)
+        last_frame = 599
+        K = np.array([[331.37, 0, 320],
+                      [0, 369.568, 240],
+                      [0, 0, 1]])
+        initial_frame = cv2.imread(os.path.join(parking_path, "images/img_00000.png"), cv2.IMREAD_GRAYSCALE)
+        last_frame = 599
 
-    elif ds == 2:
-        # Parking dataset setup
-        parking_path = "parking"
-        ground_truth = np.loadtxt(os.path.join(parking_path, "poses.txt"))[:, -8:]
-        last_frame = 598
-        K = np.loadtxt(os.path.join(parking_path, 'K.txt'), delimiter=',')
-        img1 = cv2.imread(os.path.join(parking_path, "images/img_00000.png"), cv2.IMREAD_GRAYSCALE)
+        img1 = initial_frame
         img2 = cv2.imread(os.path.join(parking_path, "images/img_00001.png"), cv2.IMREAD_GRAYSCALE)
-        img3 = cv2.imread(os.path.join(parking_path, "images/img_00002.png"), cv2.IMREAD_GRAYSCALE)
-
-
-
+        img3= cv2.imread(os.path.join(parking_path, "images/img_00002.png"), cv2.IMREAD_GRAYSCALE)
+        continuous = Continuous_operation(K)
+        keypoints,p_W_landmarks = initialization(img1, img2, img3, ds, continuous)
     
-    else:
-        raise ValueError("Invalid dataset selection.")
-    # Initialize the continuous operation class
-    continuous = Continuous_operation(K)
-    keypoints,p_W_landmarks = initialization(img1, img2, img3, ds, continuous)
     #print("landmarks shape_init", p_W_landmarks.shape)
         
 
@@ -157,12 +137,7 @@ def main():
     continuous.plot_keypoints_and_displacements(img1, img2, old_pts, next_pts)
     
     #img1 = img2
-    # S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img2)
-
-    # continuous.plot_keypoints_and_displacements(img1, img2, old_pts, next_pts)
-    
-    img1 = img2
-
+  
     T_total = np.eye(4)
     # continuous.plot_pose_and_landmarks_2D(T_total, continuous.S['X'])
 
@@ -183,6 +158,8 @@ def main():
             img2 = cv2.imread(os.path.join(kitti_path, "05/image_0/{:06d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
         if ds == 1:
             img2 = cv2.imread(os.path.join(kitti_path, "05/image_0/{:06d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
+        if ds == 2:
+            img2 = cv2.imread(left_images[i], cv2.IMREAD_GRAYSCALE)
         if ds == 3:
             img2 = cv2.imread(os.path.join(parking_path, "images/img_{:05d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
         # Process the current frame to get tracked keypoints => Have a look at the "continuous operation" class

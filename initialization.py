@@ -7,16 +7,19 @@ from continous_operation import Continuous_operation #TODO REMOVE
 
 
 def initialization(img1, img2, img3, ds,  self):
-    if ds== 0:
+    if ds== 0: #KITTI
         # Parameters
         number_matches = 1000  # it selects the number_matches best matches to go on
         feature_params = dict(maxCorners=number_matches, qualityLevel=0.015, minDistance=17)
-
     elif ds == 1:
+         # Parameters
+        number_matches = 1000  # it selects the number_matches best matches to go on
+        feature_params = dict(maxCorners=number_matches, qualityLevel=0.015, minDistance=17)
+    elif ds == 2:
         # Parameters
         number_matches = 1000
         feature_params = dict(maxCorners=number_matches, qualityLevel=0.01, minDistance=10)
-    elif ds == 2:
+    elif ds == 3:
         # Parameters
         number_matches = 1000
         feature_params = dict(maxCorners=number_matches, qualityLevel=0.01, minDistance=10)
