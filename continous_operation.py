@@ -189,8 +189,8 @@ class Continuous_operation:
             return old_pts, next_pts
 
         # Initialize storage for new landmarks and keypoints
-        new_landmarks = []
-        new_keypoints = []
+        new_landmarks = np.empty((3, 0))
+        new_keypoints = np.empty((2, 0))
         mask_to_keep = np.ones(self.S['C'].shape[1], dtype=bool)
 
         #Find image center for bearing vector
@@ -199,8 +199,8 @@ class Continuous_operation:
         center_y = height // 2 #get int value
 
         N = self.S['C'].shape[1] #number of candidates
-        """
-        ##GROUPING CANDIDATES WITH THE SAME FIRST OBSERVATION
+        
+        
         #Find groups of candidates with the same first observation
         groups = [] #placeholder for groups of same first observation
 
@@ -220,62 +220,76 @@ class Continuous_operation:
             start_col += count
         
         print("Groups: ", groups)
-        """
+        
         # Iterate over candidate keypoints
         #Include all keypoints with the same first_observation to improve triangulation
-        first_pose_last = self.S['T'][:, 0].reshape(4, 4)
-        for i in range(N):
+        start_col = 0
+
+        #get current pose
+        current_pose = T  # Current pose (projection matrix)
+        P2 = self.K @ current_pose[:3]  # Second projection matrix: K * [R|t] for the current pose
+        current_rot = P2[:3, :3]
+       
+        #print("Current Pose shape: ", current_pose.shape)
+        #print("Current Pose: ", current_pose)
+
+        for size in groups:
             # Get the first observation and corresponding pose
-            
-            first_observation = self.S['F'][:, i]  # 2D keypoint (u, v)
-            first_pose = self.S['T'][:, i].reshape(4, 4)  # Pose matrix (4x4)
-            first_rot = first_pose[:3, :3]
-            #print("First Pose shape: ", first_pose.shape)   
-            # Get the current observation and current pose
-            current_observation = self.S['C'][:, i]  # 2D keypoint (u, v)
-            current_pose = T  # Current pose (projection matrix)
-            current_rot = current_pose[:3, :3]
-            #print("Current Pose shape: ", current_pose.shape)
-
-            #print("First Pose: ", first_pose)
-            #print("Current Pose: ", current_pose)
-            #print("First Observation: ", first_observation)
-            #print("Current Observation: ", current_observation)
-
+            first_pose = self.S['T'][:, start_col].reshape(4, 4)  # Pose matrix (4x4)
             P1 = self.K @ first_pose[:3]  # First projection matrix: K * [R|t] for the first pose
-            P2 = self.K @ current_pose[:3]  # Second projection matrix: K * [R|t] for the current pose
+            first_rot = P1[:3, :3]
+            #print("First Pose: ", first_pose)
+            current_triangulation = []
+            first_triangulation = []
+            for i in range(start_col, start_col + size):
+                first_observation = self.S['F'][:, i]  # 2D keypoint (u, v)
+            
+                # Get the current observation
+                current_observation = self.S['C'][:, i]  # 2D keypoint (u, v)
+            
+                #print("First Observation: ", first_observation 
+                #print("Current Observation: ", current_observation                     
 
+                # Compute the bearing vectors
+                first_normalized = np.linalg.inv(self.K) @ np.array([first_observation[0]- center_x, first_observation[1]-center_y, 1.0])
+                current_normalized = np.linalg.inv(self.K) @ np.array([current_observation[0]-center_x, current_observation[1]-center_y, 1.0])
 
-            # Compute the bearing vectors
-            first_normalized = np.linalg.inv(self.K) @ np.array([first_observation[0]- center_x, first_observation[1]-center_y, 1.0])
-            current_normalized = np.linalg.inv(self.K) @ np.array([current_observation[0]-center_x, current_observation[1]-center_y, 1.0])
+                first_bearing = first_rot@first_normalized 
+                current_bearing = current_rot@current_normalized
+                # Compute the angle between the bearings
+                cos_angle = np.dot(first_bearing, current_bearing) / (np.linalg.norm(first_bearing) * np.linalg.norm(current_bearing))
+                angle = np.arccos(np.clip(cos_angle, -1, 1))
 
-            first_bearing = first_rot@first_normalized 
-            current_bearing = current_rot@current_normalized
-            # Compute the angle between the bearings
-            cos_angle = np.dot(first_bearing, current_bearing) / (np.linalg.norm(first_bearing) * np.linalg.norm(current_bearing))
-            angle = np.arccos(np.clip(cos_angle, -1, 1))
-
-            # Only triangulate if the angle exceeds the threshold
-            angle_threshold = np.deg2rad(1.0)  # Example threshold of 1 degree
-            if angle > angle_threshold:
-                # Triangulate using first and current observations
-                points_4d = cv2.triangulatePoints(P1, P2, first_observation.reshape(2, 1), current_observation.reshape(2, 1))
-                points_3d = points_4d[:3] / points_4d[3]  # Convert from homogeneous to 3D
-                if points_3d[2] > 0:  # Check if the depth is positive
-                    new_landmarks.append(points_3d)
-                    new_keypoints.append(current_observation)
+                # Only triangulate if the angle exceeds the threshold
+                angle_threshold = np.deg2rad(1.0)  # Example threshold of 1 degree
+                if angle > angle_threshold:
+                    current_triangulation.append(current_observation) #Triangulate this point later!
+                    first_triangulation.append(first_observation)
                     mask_to_keep[i] = False
+                # Triangulate using first and current observations
 
-                # new_landmarks.append(points_3d)
-                # new_keypoints.append(current_observation)
-                # mask_to_keep[i] = False
+            current_triangulation = np.array(current_triangulation)
+            first_triangulation = np.array(first_triangulation)
+            print("Current Triangulation shape: ", current_triangulation.shape)
+            print("First Triangulation shape: ", first_triangulation.shape)
+            if current_triangulation.size > 0 and first_triangulation.size > 0:
+                points_4d = cv2.triangulatePoints(P1, P2, first_triangulation.T, current_triangulation.T)
+                points_3d = points_4d[:3] / points_4d[3]  # Convert from homogeneous to 3D
+
+                mask_positive_depth = points_3d[2, :] > 0  # Apply condition to all elements along axis 1
+                points_3d = points_3d[:, mask_positive_depth]
+                current_observation = current_triangulation[mask_positive_depth, :]
+            
+                new_landmarks = np.hstack((new_landmarks, points_3d)) if new_landmarks.size > 0 else points_3d
+                new_keypoints = np.hstack((new_keypoints, current_observation.T)) if new_keypoints.size > 0 else current_observation.T
+
+            start_col += size
 
         # Update state with new landmarks and keypoints
-        if new_landmarks:
+        if new_landmarks.size > 0: 
 
-            new_landmarks = np.hstack(new_landmarks) if len(new_landmarks) > 0 else np.empty((3, 0))
-            new_keypoints = np.array(new_keypoints).T  # Convert to 2D array of shape (2, N)
+            #new_landmarks = np.hstack(new_landmarks) if len(new_landmarks) > 0 else np.empty((3, 0))
+            #new_keypoints = np.array(new_keypoints).T  # Convert to 2D array of shape (2, N)
 
             
             # # Perform RANSAC to remove outliers based on 3D landmark position
