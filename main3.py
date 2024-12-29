@@ -4,12 +4,12 @@ import cv2
 from continous_operation import Continuous_operation
 from matplotlib import pyplot as plt
 from initialization import initialization
-from video_generator import *
+# from video_generator import *
 from multiprocessing import Pool
 import threading
-
+from video_generator1 import plot_and_generate_video
 def main():
-    ds = 3 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
+    ds = 1 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
 
     if ds == 0:
         # KITTI dataset setup with given intialization
