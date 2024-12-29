@@ -228,10 +228,10 @@ class Continuous_operation:
         #get current pose
         current_pose = T  # Current pose (projection matrix)
         R_curr = current_pose[:3, :3]
-        R_vec_cur = cv2.Rodrigues(R_curr)[0]
+        R_vec_cur = cv2.Rodrigues(R_curr)[0] #calculate rvec for later use
         T_vec_cur = current_pose[:3, 3]
         P2 = self.K @ current_pose[:3]  # Second projection matrix: K * [R|t] for the current pose
-        current_rot = P2[:3, :3]
+        current_rot = P2[:3, :3] #not sure if this is correct
        
         #print("Current Pose shape: ", current_pose.shape)
         #print("Current Pose: ", current_pose)
@@ -243,7 +243,7 @@ class Continuous_operation:
             R_vec_first = cv2.Rodrigues(R_first)[0]
             T_vec_first = first_pose[:3, 3]
             P1 = self.K @ first_pose[:3]  # First projection matrix: K * [R|t] for the first pose
-            first_rot = P1[:3, :3]
+            first_rot = P1[:3, :3] #not sure if this is correct
             #print("First Pose: ", first_pose)
             current_triangulation = []
             first_triangulation = []
@@ -256,12 +256,14 @@ class Continuous_operation:
                 #print("First Observation: ", first_observation 
                 #print("Current Observation: ", current_observation                     
 
-                # Compute the bearing vectors
+                # Compute the bearing vectors by normalizing the observations
                 first_normalized = np.linalg.inv(self.K) @ np.array([first_observation[0]- center_x, first_observation[1]-center_y, 1.0])
                 current_normalized = np.linalg.inv(self.K) @ np.array([current_observation[0]-center_x, current_observation[1]-center_y, 1.0])
-
+                
+                #multiply with rotation matrix to get bearing vector
                 first_bearing = first_rot@first_normalized 
                 current_bearing = current_rot@current_normalized
+
                 # Compute the angle between the bearings
                 cos_angle = np.dot(first_bearing, current_bearing) / (np.linalg.norm(first_bearing) * np.linalg.norm(current_bearing))
                 angle = np.arccos(np.clip(cos_angle, -1, 1))
@@ -282,16 +284,23 @@ class Continuous_operation:
             if current_triangulation.size > 0 and first_triangulation.size > 0:
                 points_4d = cv2.triangulatePoints(P1, P2, first_triangulation.T, current_triangulation.T)
                 points_3d = points_4d[:3] / points_4d[3]  # Convert from homogeneous to 3D
-
+                
+                # filter out points with negative depth
                 mask_positive_depth = points_3d[2, :] > 0  # Apply condition to all elements along axis 1
+                print("Group size: ", size)
                 print("Mask Positive Depth: ", len(mask_positive_depth))
                 points_3d = points_3d[:, mask_positive_depth]
                 current_observation = current_triangulation[mask_positive_depth, :]
-
+                # Update the mask to keep the valid depth points
+                relevant_range = mask_to_keep[start_col:start_col + size]
+                #because the mask is only for the current group, we need to add the start_col
+                indices = np.where(relevant_range==0)[0]
+                indices_in_original = indices + start_col
+                mask_to_keep[indices_in_original] = ~mask_positive_depth
 
                 first_triangulation = first_triangulation[mask_positive_depth, :]
                 current_triangulation = current_triangulation[mask_positive_depth, :]   
-                if REJECT_ERRORS: 
+                if REJECT_ERRORS and points_3d.shape[1] > 0: 
                     # Reproject back into 2D image space
                     points_2d_proj1 = cv2.projectPoints(points_3d.T, R_vec_first, T_vec_first, self.K , None)[0].squeeze()
                     points_2d_proj2 = cv2.projectPoints(points_3d.T, R_vec_cur, T_vec_cur, self.K , None)[0].squeeze()
@@ -301,35 +310,37 @@ class Continuous_operation:
                     error2 = np.linalg.norm(current_triangulation - points_2d_proj2, axis=1)
 
                     # Use a threshold to filter out outliers
-                    reprojection_error_threshold = 2.0  # Example threshold
+                    reprojection_error_threshold = 4.0  # Example threshold, TODO: Tune this value
                     mask_valid_reprojection = (error1 < reprojection_error_threshold) & (error2 < reprojection_error_threshold)
 
+                    # Print the number of entries which are True
+                    num_valid_reprojections = np.sum(mask_valid_reprojection)
+                    print("Number of valid reprojections:", num_valid_reprojections)
+
+                    # Filter out invalid reprojections
                     points_3d = points_3d[:, mask_valid_reprojection]
                     current_observation = current_observation[mask_valid_reprojection]
 
+                    # Update the mask to keep the valid reprojections
                     relevant_range = mask_to_keep[start_col:start_col + size]
-                    
+                    #because the mask is only for the current group, we need to add the start_col
                     indices = np.where(relevant_range==0)[0]
 
                     indices_in_original = indices + start_col
 
-                    if len(indices_in_original)== len(mask_valid_reprojection):
-                        print("Indices in original and mask valid reprojection have the same length")
-                    else:
-                        print("Indices in original and mask valid reprojection have different lengths")
-                        print("Indices in original: ", len(indices_in_original))
-                        print("Mask valid reprojection: ", len(mask_valid_reprojection))
+                    #if len(indices_in_original)== len(mask_valid_reprojection):
+                    #    print("Indices in original and mask valid reprojection have the same length")
+                    #else:
+                    #    print("Indices in original and mask valid reprojection have different lengths")
+                    #    print("Indices in original: ", len(indices_in_original))
+                    #    print("Mask valid reprojection: ", len(mask_valid_reprojection))
 
 
-                    mask_to_keep[indices_in_original] = mask_valid_reprojection
-
-
-
-
-            
+                    mask_to_keep[indices_in_original] = ~mask_valid_reprojection  #invert the mask_valid_reprojection so that true = invalid
+    
                 new_landmarks = np.hstack((new_landmarks, points_3d)) if new_landmarks.size > 0 else points_3d
                 new_keypoints = np.hstack((new_keypoints, current_observation.T)) if new_keypoints.size > 0 else current_observation.T
-
+    
             start_col += size
 
 
