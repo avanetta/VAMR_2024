@@ -90,11 +90,12 @@ class Continuous_operation:
     # Hier DIE BAUSTELLE LEIDER NOCH NICHT FERTIG
 
     def add_new_candidates(self, curr_frame, T):
-        new_keypoints = cv2.goodFeaturesToTrack(curr_frame, maxCorners=400, qualityLevel=0.015, minDistance=18)
+        new_keypoints = cv2.goodFeaturesToTrack(curr_frame, maxCorners=600, qualityLevel=0.015, minDistance=15)
+
 
         if new_keypoints is not None:
             new_keypoints = np.squeeze(new_keypoints, axis=1)  # Convert to Nx2 array
-
+           
             # Filter overlapping keypoints
             current_keypoints = self.S['P'].T  # Existing keypoints
             valid_new_keypoints = []
@@ -103,11 +104,13 @@ class Continuous_operation:
                 if np.min(distances) > 10:  # Minimum distance threshold
                     valid_new_keypoints.append(kp)
             new_keypoints = np.array(valid_new_keypoints)
+            
 
             # Add valid new keypoints to candidates
             if new_keypoints.size > 0:
                 # Convert new keypoints to float32 for tracking
-                new_keypoints = new_keypoints.astype(np.float32).reshape(-1, 1, 2)
+                #new_keypoints = new_keypoints.astype(np.float32).reshape(-1, 1, 2)
+                
                 """
                 # Perform KLT tracking for new keypoints
                 tracked_pts, status, _ = cv2.calcOpticalFlowPyrLK(curr_frame, curr_frame, new_keypoints, None)
@@ -131,7 +134,7 @@ class Continuous_operation:
                     self.S['F'] = (
                         np.hstack((self.S['F'], kp.reshape(-1, 1))) if self.S['F'] is not None else kp.reshape(-1, 1)
                     )
-                    new_poses = np.tile(T.reshape(-1, 1), (1, new_keypoints.shape[1]))
+                    new_poses = T.reshape(-1, 1)
                     self.S['T'] = (
                         np.hstack((self.S['T'], new_poses))
                         if self.S['T'] is not None
@@ -146,7 +149,10 @@ class Continuous_operation:
     def KLT_for_new_candidates(self, past_frame, curr_frame):
         # Track candidate keypoints
             candidate_pts = self.S['C'].T  # Convert to Nx2 for tracking
-            tracked_pts, status, _ = cv2.calcOpticalFlowPyrLK(past_frame, curr_frame, candidate_pts, None)
+            candidate_pts = candidate_pts.reshape(-1, 1, 2)  # Convert to Nx1x2 for calcOpticalFlowPyrLK
+            lk_params = dict(winSize=(21,21), maxLevel=3,
+                         criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 0.01))
+            tracked_pts, status, _ = cv2.calcOpticalFlowPyrLK(past_frame, curr_frame, candidate_pts, None, **lk_params)
             
             # Keep only successfully tracked candidates
             valid = status.flatten() == 1
@@ -155,14 +161,17 @@ class Continuous_operation:
 
             self.S['F'] = self.S['F'][:, valid] if np.any(valid) else None
             self.S['T'] = self.S['T'][:, valid] if np.any(valid) else None
-
+            
+            tracked_pts = tracked_pts.reshape(-1, 2) # Convert to Nx2 array
+            candidate_pts = candidate_pts.reshape(-1, 2) # Convert to Nx2 array
              # Perform RANSAC on the tracked keypoints
             if len(tracked_pts) >= 8:  # Minimum points for RANSAC
                 F, inlier_mask = cv2.findFundamentalMat(candidate_pts, tracked_pts, cv2.FM_RANSAC, 1.0, 0.99)
                 inlier_mask = inlier_mask.flatten() == 1
                 tracked_pts = tracked_pts[inlier_mask]
                 candidate_pts = candidate_pts[inlier_mask]
-
+            else:
+                inlier_mask = np.zeros(tracked_pts.shape[0], dtype=bool)
             # new_F = self.S['F'][:, inlier_mask] if np.any(inlier_mask) else None
             # new_T = self.S['T'][:, inlier_mask] if np.any(inlier_mask) else None
             self.S['C'] = tracked_pts.T if np.any(inlier_mask) else None
@@ -172,7 +181,7 @@ class Continuous_operation:
 
 
 
-    def triangulate_new_landmarks(self, old_pts, next_pts, T):
+    def triangulate_new_landmarks(self, old_pts, next_pts, T, curr_frame):
         """
         Triangulate new landmarks from candidate keypoints and their tracks.
         """
@@ -184,30 +193,65 @@ class Continuous_operation:
         new_keypoints = []
         mask_to_keep = np.ones(self.S['C'].shape[1], dtype=bool)
 
+        #Find image center for bearing vector
+        height, width = curr_frame.shape[:2]
+        center_x = width // 2 #get int value
+        center_y = height // 2 #get int value
+
+        N = self.S['C'].shape[1] #number of candidates
+        """
+        ##GROUPING CANDIDATES WITH THE SAME FIRST OBSERVATION
+        #Find groups of candidates with the same first observation
+        groups = [] #placeholder for groups of same first observation
+
+        start_col = 0 
+
+        while start_col < N:
+            current_column = self.S['T'][:, start_col] #get current column of first observation
+            #count how many columns have the same first observation
+            count = 1
+            while start_col + count < N and np.all(self.S['T'][:, start_col] == self.S['T'][:, start_col + count]):
+                count += 1
+
+            # Append the size of this group
+            groups.append(count)
+
+            # Move the start column index to the next group
+            start_col += count
+        
+        print("Groups: ", groups)
+        """
         # Iterate over candidate keypoints
-        for i in range(self.S['C'].shape[1]):
+        #Include all keypoints with the same first_observation to improve triangulation
+        first_pose_last = self.S['T'][:, 0].reshape(4, 4)
+        for i in range(N):
             # Get the first observation and corresponding pose
             
             first_observation = self.S['F'][:, i]  # 2D keypoint (u, v)
             first_pose = self.S['T'][:, i].reshape(4, 4)  # Pose matrix (4x4)
-
+            first_rot = first_pose[:3, :3]
+            #print("First Pose shape: ", first_pose.shape)   
             # Get the current observation and current pose
             current_observation = self.S['C'][:, i]  # 2D keypoint (u, v)
             current_pose = T  # Current pose (projection matrix)
+            current_rot = current_pose[:3, :3]
+            #print("Current Pose shape: ", current_pose.shape)
 
-            # print("First Pose: ", first_pose)
-            # print("Current Pose: ", current_pose)
-            # print("First Observation: ", first_observation)
-            # print("Current Observation: ", current_observation)
+            #print("First Pose: ", first_pose)
+            #print("Current Pose: ", current_pose)
+            #print("First Observation: ", first_observation)
+            #print("Current Observation: ", current_observation)
 
             P1 = self.K @ first_pose[:3]  # First projection matrix: K * [R|t] for the first pose
             P2 = self.K @ current_pose[:3]  # Second projection matrix: K * [R|t] for the current pose
 
 
             # Compute the bearing vectors
-            first_bearing = np.linalg.inv(self.K) @ np.array([first_observation[0], first_observation[1], 1.0])
-            current_bearing = np.linalg.inv(self.K) @ np.array([current_observation[0], current_observation[1], 1.0])
+            first_normalized = np.linalg.inv(self.K) @ np.array([first_observation[0]- center_x, first_observation[1]-center_y, 1.0])
+            current_normalized = np.linalg.inv(self.K) @ np.array([current_observation[0]-center_x, current_observation[1]-center_y, 1.0])
 
+            first_bearing = first_rot@first_normalized 
+            current_bearing = current_rot@current_normalized
             # Compute the angle between the bearings
             cos_angle = np.dot(first_bearing, current_bearing) / (np.linalg.norm(first_bearing) * np.linalg.norm(current_bearing))
             angle = np.arccos(np.clip(cos_angle, -1, 1))
@@ -295,18 +339,21 @@ class Continuous_operation:
         # Ab hier wieder BAUSTELLE!!!!!!
         
         # if self.S['C'] is not None and self.S['C'].shape[1] > 0:
-        if self.S['C'] is not None and self.S['C'].shape[1] > 50:
+        if self.S['C'] is not None and self.S['C'].shape[1] > 0: # Threshold for the minimum number of candidates
 
             self.KLT_for_new_candidates(past_frame, curr_frame)
-            
+        # Triangulate new landmarks
+        #WICHTIG vor dem adden von neuen candidates zuerst traingulieren, mit den über mehrere Frames getrackten keypoints
 
-            # Monitor keypoint count
+        old_pts, next_pts = self.triangulate_new_landmarks(old_pts, next_pts, T, curr_frame)
+
+        # Monitor keypoint count
         if self.S['P'].shape[1] < 300 and (self.S['C'] is None or self.S['C'].shape[1] < 100):  # Threshold for the minimum number of keypoints
             # Detect new keypoints using Shi-Tomasi (Good Features to Track)
             self.add_new_candidates(curr_frame, T)
             
 
-        old_pts, next_pts = self.triangulate_new_landmarks(old_pts, next_pts, T)
+        
 
         return self.S, old_pts, next_pts, T, pose
 

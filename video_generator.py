@@ -74,7 +74,7 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     img_for_display = img_for_display[:, :, :3]
 
     # Save the frame to a file
-    cv2.imwrite(f'frame_{frame_index:06d}.png', img_for_display)
+    #cv2.imwrite(f'frame_{frame_index:06d}.png', img_for_display)
 
     # Show the frame in a window
     cv2.imshow('Keypoints and Displacements', img_for_display)
