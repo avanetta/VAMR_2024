@@ -14,7 +14,7 @@ def initialization(img1, img2, img3, ds,  self):
     elif ds == 1:
          # Parameters
         number_matches = 1000  # it selects the number_matches best matches to go on
-        feature_params = dict(maxCorners=number_matches, qualityLevel=0.015, minDistance=17)
+        feature_params = dict(maxCorners=number_matches, qualityLevel=0.015, minDistance=15)
     elif ds == 2:
         # Parameters
         number_matches = 1000

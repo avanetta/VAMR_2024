@@ -90,7 +90,7 @@ class Continuous_operation:
     # Hier DIE BAUSTELLE LEIDER NOCH NICHT FERTIG
 
     def add_new_candidates(self, curr_frame, T):
-        new_keypoints = cv2.goodFeaturesToTrack(curr_frame, maxCorners=600, qualityLevel=0.015, minDistance=15)
+        new_keypoints = cv2.goodFeaturesToTrack(curr_frame, maxCorners=1000, qualityLevel=0.015, minDistance=15)
 
 
         if new_keypoints is not None:
@@ -192,7 +192,7 @@ class Continuous_operation:
         new_landmarks = np.empty((3, 0))
         new_keypoints = np.empty((2, 0))
         mask_to_keep = np.ones(self.S['C'].shape[1], dtype=bool)
-
+        REJECT_ERRORS = True
         #Find image center for bearing vector
         height, width = curr_frame.shape[:2]
         center_x = width // 2 #get int value
@@ -219,7 +219,7 @@ class Continuous_operation:
             # Move the start column index to the next group
             start_col += count
         
-        print("Groups: ", groups)
+        #print("Groups: ", groups)
         
         # Iterate over candidate keypoints
         #Include all keypoints with the same first_observation to improve triangulation
@@ -227,6 +227,9 @@ class Continuous_operation:
 
         #get current pose
         current_pose = T  # Current pose (projection matrix)
+        R_curr = current_pose[:3, :3]
+        R_vec_cur = cv2.Rodrigues(R_curr)[0]
+        T_vec_cur = current_pose[:3, 3]
         P2 = self.K @ current_pose[:3]  # Second projection matrix: K * [R|t] for the current pose
         current_rot = P2[:3, :3]
        
@@ -236,6 +239,9 @@ class Continuous_operation:
         for size in groups:
             # Get the first observation and corresponding pose
             first_pose = self.S['T'][:, start_col].reshape(4, 4)  # Pose matrix (4x4)
+            R_first = first_pose[:3, :3]
+            R_vec_first = cv2.Rodrigues(R_first)[0]
+            T_vec_first = first_pose[:3, 3]
             P1 = self.K @ first_pose[:3]  # First projection matrix: K * [R|t] for the first pose
             first_rot = P1[:3, :3]
             #print("First Pose: ", first_pose)
@@ -266,24 +272,66 @@ class Continuous_operation:
                     current_triangulation.append(current_observation) #Triangulate this point later!
                     first_triangulation.append(first_observation)
                     mask_to_keep[i] = False
+              
                 # Triangulate using first and current observations
 
             current_triangulation = np.array(current_triangulation)
             first_triangulation = np.array(first_triangulation)
-            print("Current Triangulation shape: ", current_triangulation.shape)
-            print("First Triangulation shape: ", first_triangulation.shape)
+            #print("Current Triangulation shape: ", current_triangulation.shape)
+            #print("First Triangulation shape: ", first_triangulation.shape)
             if current_triangulation.size > 0 and first_triangulation.size > 0:
                 points_4d = cv2.triangulatePoints(P1, P2, first_triangulation.T, current_triangulation.T)
                 points_3d = points_4d[:3] / points_4d[3]  # Convert from homogeneous to 3D
 
                 mask_positive_depth = points_3d[2, :] > 0  # Apply condition to all elements along axis 1
+                print("Mask Positive Depth: ", len(mask_positive_depth))
                 points_3d = points_3d[:, mask_positive_depth]
                 current_observation = current_triangulation[mask_positive_depth, :]
+
+
+                first_triangulation = first_triangulation[mask_positive_depth, :]
+                current_triangulation = current_triangulation[mask_positive_depth, :]   
+                if REJECT_ERRORS: 
+                    # Reproject back into 2D image space
+                    points_2d_proj1 = cv2.projectPoints(points_3d.T, R_vec_first, T_vec_first, self.K , None)[0].squeeze()
+                    points_2d_proj2 = cv2.projectPoints(points_3d.T, R_vec_cur, T_vec_cur, self.K , None)[0].squeeze()
+
+                    # Compute reprojection error
+                    error1 = np.linalg.norm(first_triangulation - points_2d_proj1, axis=1)
+                    error2 = np.linalg.norm(current_triangulation - points_2d_proj2, axis=1)
+
+                    # Use a threshold to filter out outliers
+                    reprojection_error_threshold = 2.0  # Example threshold
+                    mask_valid_reprojection = (error1 < reprojection_error_threshold) & (error2 < reprojection_error_threshold)
+
+                    points_3d = points_3d[:, mask_valid_reprojection]
+                    current_observation = current_observation[mask_valid_reprojection]
+
+                    relevant_range = mask_to_keep[start_col:start_col + size]
+                    
+                    indices = np.where(relevant_range==0)[0]
+
+                    indices_in_original = indices + start_col
+
+                    if len(indices_in_original)== len(mask_valid_reprojection):
+                        print("Indices in original and mask valid reprojection have the same length")
+                    else:
+                        print("Indices in original and mask valid reprojection have different lengths")
+                        print("Indices in original: ", len(indices_in_original))
+                        print("Mask valid reprojection: ", len(mask_valid_reprojection))
+
+
+                    mask_to_keep[indices_in_original] = mask_valid_reprojection
+
+
+
+
             
                 new_landmarks = np.hstack((new_landmarks, points_3d)) if new_landmarks.size > 0 else points_3d
                 new_keypoints = np.hstack((new_keypoints, current_observation.T)) if new_keypoints.size > 0 else current_observation.T
 
             start_col += size
+
 
         # Update state with new landmarks and keypoints
         if new_landmarks.size > 0: 
@@ -328,6 +376,7 @@ class Continuous_operation:
         :param past_frame: Grayscale frame at time t-1
         :param curr_frame: Grayscale frame at time t
         """
+
         # Track keypoints PART 4.1 
         old_pts, next_pts, valid = self.klt_tracking(past_frame, curr_frame)
 

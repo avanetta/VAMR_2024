@@ -3,13 +3,14 @@ import numpy as np
 import cv2
 from continous_operation import Continuous_operation
 from matplotlib import pyplot as plt
+plt.rcParams['figure.max_open_warning'] = 0
 from initialization import initialization
 from video_generator import *
 from multiprocessing import Pool
 import threading
 
 def main():
-    ds = 3 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
+    ds = 1 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
 
     if ds == 0:
         # KITTI dataset setup with given intialization
@@ -163,6 +164,7 @@ def main():
         if ds == 3:
             img2 = cv2.imread(os.path.join(parking_path, "images/img_{:05d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
         # Process the current frame to get tracked keypoints => Have a look at the "continuous operation" class
+        print("Processing Frame: ", i)
         S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img2)
         # Maybe but not sure for global consistency
         T_total = T
