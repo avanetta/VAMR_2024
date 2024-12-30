@@ -229,7 +229,7 @@ class Continuous_operation:
         # 1) Angle threshold logic
         min_keypoint_threshold = 20 
         angle_threshold_default = np.deg2rad(0.65)  # ~37 deg
-        angle_threshold_relaxed = np.deg2rad(0.65)  # ~14 deg
+        angle_threshold_relaxed = np.deg2rad(0.24)  # ~14 deg
 
         current_keypoints_count = self.S['P'].shape[1] if self.S['P'] is not None else 0
 
@@ -249,7 +249,7 @@ class Continuous_operation:
         # Now we pick the angle threshold
         if current_keypoints_count < min_keypoint_threshold or is_fast_motion:
             angle_threshold = angle_threshold_relaxed
-            max_distance = 120.0  # allow more distant points
+            max_distance = 200.0  # allow more distant points
             print("Using relaxed angle threshold and distance.")
         else:
             angle_threshold = angle_threshold_default
