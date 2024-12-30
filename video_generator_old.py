@@ -8,7 +8,7 @@ import numpy as np
 
 def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, frame_index,gt_matrices,gt_trajectory):
     # Create a blank canvas for the trajectory plot
-    traj_canvas = np.ones((800, 1000, 3), dtype=np.uint8) * 255
+    traj_canvas = np.ones((600, 1000, 3), dtype=np.uint8) * 255
 
     # Extract landmarks and camera trajectory
     landmarks_3D = continuous.S['X']
@@ -21,17 +21,17 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     
     # Scale and shift for visualization
     scale = 1.2
-    x_shift, z_shift = 400, 200
+    x_shift, z_shift = 150, 10
     
     # Draw grid lines
-    for grid_x in range(-350, 400, 10):  # Adjust range and step for clarity
+    for grid_x in range(-50, 600, 10):  # Adjust range and step for clarity
         x_plot = int((grid_x + x_shift) * scale)
         cv2.line(traj_canvas, (x_plot, 0), (x_plot, traj_canvas.shape[0]), (200, 200, 200), 1)
         if grid_x % 50 == 0:
             cv2.putText(traj_canvas, f"{grid_x}", (x_plot - 15, traj_canvas.shape[0] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1)
 
-    for grid_z in range(-200, 400, 10):  # Adjust range and step for clarity
+    for grid_z in range(-10, 500, 10):  # Adjust range and step for clarity
         z_plot = int((grid_z + z_shift) * scale)
         cv2.line(traj_canvas, (0, z_plot), (traj_canvas.shape[1], z_plot), (200, 200, 200), 1)
         if grid_z % 50 == 0:
@@ -95,8 +95,7 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     combined_canvas = np.zeros((max(traj_canvas.shape[0], keypoints_canvas.shape[0]), combined_width, 3), dtype=np.uint8)
     combined_canvas[:traj_canvas.shape[0], 20:20 + traj_canvas.shape[1]] = traj_canvas
     combined_canvas[:keypoints_canvas.shape[0], traj_canvas.shape[1] + 40:] = keypoints_canvas
-    # print("combined_canvas",combined_canvas.shape)
-    # print("traj_canvas",traj_canvas.shape)
+
     # Resize and display
     scale_factor = 1  # Adjust the scale factor as needed
     scaled_canvas = cv2.resize(combined_canvas, (0, 0), fx=scale_factor, fy=scale_factor)
