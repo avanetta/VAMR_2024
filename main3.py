@@ -1,7 +1,9 @@
 import os
 import numpy as np
 import cv2
-from continous_operation import Continuous_operation
+# from continous_operation import Continuous_operation
+from continous_operation_1 import Continuous_operation
+
 from matplotlib import pyplot as plt
 plt.rcParams['figure.max_open_warning'] = 0
 from initialization import initialization
@@ -143,7 +145,7 @@ def main():
     # continuous.plot_pose_and_landmarks_2D(T_total, continuous.S['X'])
 
     fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Codec for video (XVID is a popular codec)
-    video_writer = cv2.VideoWriter('camera_trajectory_video.avi', fourcc, 2.0, (1500, 800))
+    video_writer = cv2.VideoWriter('camera_trajectory_video.avi', fourcc, 2.0, (2266, 800))
 
     poses = []
     poses.append(T_total)
