@@ -2,15 +2,20 @@ import os
 import numpy as np
 import cv2
 # from continous_operation import Continuous_operation
-from continous_operation_1 import Continuous_operation
+# from continous_operation_1 import Continuous_operation
+from continous_operation_2 import Continuous_operation
 
 from matplotlib import pyplot as plt
 plt.rcParams['figure.max_open_warning'] = 0
-from initialization import initialization
+# from initialization import initialization
+from initialization_2 import initialization
+
 # from video_generator import *
 #from multiprocessing import Pool
 #import threading
 from video_generator1 import plot_and_generate_video
+from video_generator2 import plot_and_generate_video_2
+
 def main():
     ds = 3 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
 
@@ -116,8 +121,8 @@ def main():
         last_frame = 599
 
         img1 = initial_frame
-        img2 = cv2.imread(os.path.join(parking_path, "images/img_00001.png"), cv2.IMREAD_GRAYSCALE)
-        img3= cv2.imread(os.path.join(parking_path, "images/img_00002.png"), cv2.IMREAD_GRAYSCALE)
+        img2 = cv2.imread(os.path.join(parking_path, "images/img_00002.png"), cv2.IMREAD_GRAYSCALE)
+        img3= cv2.imread(os.path.join(parking_path, "images/img_00003.png"), cv2.IMREAD_GRAYSCALE)
         continuous = Continuous_operation(K)
         continuous.S['DS'] = 3
         keypoints,p_W_landmarks = initialization(img1, img2, img3, ds, continuous)
@@ -141,9 +146,9 @@ def main():
     #     img2 = cv2.imread(os.path.join(kitti_path, "05/image_01/000001.png"), cv2.IMREAD_GRAYSCALE)
 
 
-    S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img2)
+    S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img3)
 
-    continuous.plot_keypoints_and_displacements(img1, img2, old_pts, next_pts)
+    continuous.plot_keypoints_and_displacements(img1, img3, old_pts, next_pts)
     
     #img1 = img2
   
@@ -151,17 +156,22 @@ def main():
     # continuous.plot_pose_and_landmarks_2D(T_total, continuous.S['X'])
 
     fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Codec for video (XVID is a popular codec)
-    video_writer = cv2.VideoWriter('camera_trajectory_video.avi', fourcc, 2.0, (2266, 800))
+    #video_writer = cv2.VideoWriter('camera_trajectory_video.avi', fourcc, 2.0, (2266, 800))
+    if ds == 0 or ds == 1:
+        video_writer = cv2.VideoWriter('camera_trajectory_video.avi', fourcc, 30.0, (2266, 800))
+    if ds == 3:
+        video_writer = cv2.VideoWriter('camera_trajectory_video.avi', fourcc, 10.0, (1480, 480))
 
     poses = []
     poses.append(T_total)
+    poses.append
     camera_trajectory = []
     camera_trajectory.append(T_total[:3, 3])
     gt_trajectory = []
     gt_trajectory.append(gt_matrices[0][:3, 3])
     #with Pool() as pool:
     # Start the loop from frame 2
-    for i in range(1, last_frame):
+    for i in range(2, last_frame):
         # Load the next frame
         if ds == 0:
             img2 = cv2.imread(os.path.join(kitti_path, "05/image_0/{:06d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
@@ -174,13 +184,34 @@ def main():
         # Process the current frame to get tracked keypoints => Have a look at the "continuous operation" class
         print("Processing Frame: ", i)
         S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img2)
+        
+        if continuous.S['DS'] == 3:
+        # Apply scaling correction
+            ground_truth_distance = 0.15  # meters per frame (example)
+            estimated_distance = 0.33     # meters per frame (example)
+            scaling_factor = ground_truth_distance / estimated_distance
+
+            # Correct the scale of 3D landmarks
+            if i ==3:
+                continuous.S['X'] *= scaling_factor
+                T[:3, 3] *= scaling_factor
+                pose[:3, 3] *= scaling_factor  # Apply scaling to the pose parameter
+
+            # Correct the scale of the pose translation
+            
+
+
         # Maybe but not sure for global consistency
         T_total = T
         # Call the function to plot and generate video in 
         # parallel with the current frame
         #pool.apply_async(plot_and_generate_video, (continuous, pose, camera_trajectory, img2, next_pts, old_pts, i))
-        if not plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, i, gt_matrices, gt_trajectory):
-            break
+        if continuous.S['DS'] == 0 or continuous.S['DS'] == 1:
+            if not plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, i, gt_matrices, gt_trajectory):
+                break
+        if continuous.S['DS'] == 3:
+            if not plot_and_generate_video_2(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, i, gt_matrices, gt_trajectory):
+                break
         # Set the current frame as the previous frame for the next iteration
         img1 = img2
     #pool.close()

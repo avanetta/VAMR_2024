@@ -6,9 +6,9 @@
 import cv2
 import numpy as np
 
-def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, frame_index, gt_matrices, gt_trajectory):
+def plot_and_generate_video_2(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, frame_index, gt_matrices, gt_trajectory):
     # Create a blank canvas for the trajectory plot
-    traj_canvas = np.ones((800, 1000, 3), dtype=np.uint8) * 255
+    traj_canvas = np.ones((400, 800, 3), dtype=np.uint8) * 255
 
     # Extract landmarks and camera trajectory
     landmarks_3D = continuous.S['X']
@@ -21,7 +21,7 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     
     # Scale and shift for visualization
     scale = 1.2
-    x_shift, z_shift = 400, 600  # Adjust shift to accommodate flipped z-axis
+    x_shift, z_shift = 100, 200 # Adjust shift to accommodate flipped z-axis
 
     # Draw grid lines
     for grid_x in range(-350, 400, 10):  # Adjust range and step for clarity
@@ -126,7 +126,7 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     print("combined_canvas shape", combined_canvas.shape)
     print("traj_canvas shape", traj_canvas.shape)
     # Resize and display
-    scale_factor = 0.8  # Adjust the scale factor as needed
+    scale_factor = 1  # Adjust the scale factor as needed
     scaled_canvas = cv2.resize(combined_canvas, (0, 0), fx=scale_factor, fy=scale_factor)
     cv2.imshow('Trajectory and Keypoints', scaled_canvas)
     video_writer.write(scaled_canvas)

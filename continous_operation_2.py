@@ -115,9 +115,9 @@ class Continuous_operation:
             quality_level = 0.005
             min_distance = 15
         if self.S['DS']== 3: #Parameters for parking
-            max_corners = 3000
-            quality_level = 0.005
-            min_distance = 10
+            max_corners = 400
+            quality_level = 0.0001
+            min_distance = 50
 
         new_keypoints = cv2.goodFeaturesToTrack(curr_frame, max_corners, quality_level, min_distance)
 
@@ -130,8 +130,12 @@ class Continuous_operation:
             valid_new_keypoints = []
             for kp in new_keypoints:
                 distances = np.linalg.norm(current_keypoints - kp, axis=1)
-                if np.min(distances) > 10:  # Minimum distance threshold
-                    valid_new_keypoints.append(kp)
+                if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
+                    if np.min(distances) > 10:  # Minimum distance threshold
+                        valid_new_keypoints.append(kp)
+                if self.S['DS']== 3: #Parameters for parking
+                    if np.min(distances) > 30:  # Minimum distance threshold
+                        valid_new_keypoints.append(kp)
             new_keypoints = np.array(valid_new_keypoints)
             
 
@@ -187,7 +191,7 @@ class Continuous_operation:
                             criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.1))
             if self.S['DS']== 3: #Parameters for parking
                 lk_params = dict(winSize=(31,31), maxLevel=3,
-                         criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 0.03))
+                         criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 0.01))
             tracked_pts, status, _ = cv2.calcOpticalFlowPyrLK(past_frame, curr_frame, candidate_pts, None, **lk_params)
             
             # Keep only successfully tracked candidates
@@ -200,6 +204,29 @@ class Continuous_operation:
             
             tracked_pts = tracked_pts.reshape(-1, 2) # Convert to Nx2 array
             candidate_pts = candidate_pts.reshape(-1, 2) # Convert to Nx2 array
+
+            # (A) Optional: Filter Out Insufficient Flow for DS=3 (parking):
+            # Only do this if you're sure you want to discard points with too little motion.
+            # ------------------------------------------------------------------
+            if self.S['DS'] == 3:
+                # Compute displacement from candidate_pts -> tracked_pts
+                flow_vectors = tracked_pts - candidate_pts
+                flow_magnitudes = np.linalg.norm(flow_vectors, axis=1)
+                
+                # Threshold: if flow is smaller than, e.g., 1 pixel
+                # you might consider it "far away" (little parallax).
+                flow_threshold = 0
+                flow_mask = (flow_magnitudes >= flow_threshold)
+
+                tracked_pts = tracked_pts[flow_mask]
+                candidate_pts = candidate_pts[flow_mask]
+                
+                if self.S['F'] is not None:
+                    self.S['F'] = self.S['F'][:, flow_mask] if np.any(flow_mask) else None
+                if self.S['T'] is not None:
+                    self.S['T'] = self.S['T'][:, flow_mask] if np.any(flow_mask) else None
+
+
              # Perform RANSAC on the tracked keypoints
             if len(tracked_pts) >= 8:  # Minimum points for RANSAC
                 F, inlier_mask = cv2.findFundamentalMat(candidate_pts, tracked_pts, cv2.FM_RANSAC, 1.0, 0.99)
@@ -257,7 +284,7 @@ class Continuous_operation:
         # ------------------------------------------------------------
         # 1) Angle threshold logic
         if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
-            min_keypoint_threshold = 20 
+            min_keypoint_threshold = 0 
             angle_threshold_default = np.deg2rad(0.65)  # ~37 deg
             angle_threshold_relaxed = np.deg2rad(0.24)  # ~14 deg
             baseline_threshold = 5.0
@@ -274,13 +301,13 @@ class Continuous_operation:
             reproj_threshold = 4.0
 
         if self.S['DS']== 3: #Parameters for parking
-            min_keypoint_threshold = 20
-            angle_threshold_default = np.deg2rad(3)  # ~37 deg
-            angle_threshold_relaxed = np.deg2rad(1.5)  # ~14 deg
-            baseline_threshold = 5.0
-            max_distance_relaxed = 70.0
-            max_distance_default = 50.0
-            reproj_threshold =20.0
+            min_keypoint_threshold = 5
+            angle_threshold_default = np.deg2rad(0.35)  # ~37 deg
+            angle_threshold_relaxed = np.deg2rad(0.35)  # ~14 deg
+            baseline_threshold = 1000
+            max_distance_relaxed = 70
+            max_distance_default = 70
+            reproj_threshold =1.0
 
         current_keypoints_count = self.S['P'].shape[1] if self.S['P'] is not None else 0
 
@@ -388,8 +415,8 @@ class Continuous_operation:
                     local_first_points  = local_first_points[keep_z_pos]
                     local_current_points= local_current_points[keep_z_pos]
                     local_candidate_indices = local_candidate_indices[keep_z_pos]
-                if self.S['DS']== 3: #Parking
-                    points_3d[:, z_neg_mask] = -points_3d[:, z_neg_mask]
+                # if self.S['DS']== 3: #Parking
+                #     points_3d[:, z_neg_mask] = -points_3d[:, z_neg_mask]
 
             # 5) Reprojection filter
             if REJECT_ERRORS and points_3d.shape[1] > 0:
@@ -503,10 +530,13 @@ class Continuous_operation:
         if self.S['C'] is not None:
             print("Number of keypoints after triangulation:", self.S['C'].shape[1])
         # Monitor keypoint count
-        if self.S['P'].shape[1] < 400 and (self.S['C'] is None or self.S['C'].shape[1] < 200):  # Threshold for the minimum number of keypoints
-            # Detect new keypoints using Shi-Tomasi (Good Features to Track)
-            self.add_new_candidates(curr_frame, T)
-        
+        if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
+            if self.S['P'].shape[1] < 400 and (self.S['C'] is None or self.S['C'].shape[1] < 200):  # Threshold for the minimum number of keypoints
+                # Detect new keypoints using Shi-Tomasi (Good Features to Track)
+                self.add_new_candidates(curr_frame, T)
+        if self.S['DS']== 3: # Parameters for parking
+            if self.S['P'].shape[1] < 150 and (self.S['C'] is None or self.S['C'].shape[1] < 100):
+                self.add_new_candidates(curr_frame, T)
         # print("Number of candidates after adding new candidates:", self.S['C'].shape[1])
         
         
