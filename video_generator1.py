@@ -6,7 +6,7 @@
 import cv2
 import numpy as np
 
-def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, frame_index,gt_matrices,gt_trajectory):
+def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, frame_index, gt_matrices, gt_trajectory):
     # Create a blank canvas for the trajectory plot
     traj_canvas = np.ones((800, 1000, 3), dtype=np.uint8) * 255
 
@@ -21,8 +21,8 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     
     # Scale and shift for visualization
     scale = 1.2
-    x_shift, z_shift = 400, 200
-    
+    x_shift, z_shift = 400, 600  # Adjust shift to accommodate flipped z-axis
+
     # Draw grid lines
     for grid_x in range(-350, 400, 10):  # Adjust range and step for clarity
         x_plot = int((grid_x + x_shift) * scale)
@@ -31,8 +31,8 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
             cv2.putText(traj_canvas, f"{grid_x}", (x_plot - 15, traj_canvas.shape[0] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1)
 
-    for grid_z in range(-200, 400, 10):  # Adjust range and step for clarity
-        z_plot = int((grid_z + z_shift) * scale)
+    for grid_z in range(-300, 350, 10):  # Adjust range and step for clarity
+        z_plot = int((z_shift - grid_z) * scale)  # Invert z-axis
         cv2.line(traj_canvas, (0, z_plot), (traj_canvas.shape[1], z_plot), (200, 200, 200), 1)
         if grid_z % 50 == 0:
             cv2.putText(traj_canvas, f"{grid_z}", (10, z_plot - 5),
@@ -41,38 +41,66 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     # Plot landmarks on the trajectory canvas
     for x_landmark, z_landmark in zip(landmarks_3D[0], landmarks_3D[2]):
         x_plot = int((x_landmark + x_shift) * scale)
-        z_plot = int((z_landmark + z_shift) * scale)
+        z_plot = int((z_shift - z_landmark) * scale)  # Invert z-axis
         cv2.circle(traj_canvas, (x_plot, z_plot), 1, (255, 0, 0), -1)  # Blue points
 
     # Plot the camera position
     x_plot = int((x + x_shift) * scale)
-    z_plot = int((z + z_shift) * scale)
-    cv2.circle(traj_canvas, (x_plot, z_plot), 4, (0, 0, 255), -1)  # Red point for the camera
+    z_plot = int((z_shift - z) * scale)  # Invert z-axis
+    cv2.circle(traj_canvas, (x_plot, z_plot), 4, (255, 0, 255), -1)  # Red point for the camera
+
+    # Plot the GT position
+    x_plot_gt = int((x_gt + x_shift) * scale)
+    z_plot_gt = int((z_shift - z_gt) * scale)  # Invert z-axis
+    cv2.circle(traj_canvas, (x_plot_gt, z_plot_gt), 4, (255, 255, 0), -1)  # Red point for the camera
+
+    # Plot the ground truth trajectory if available
+    if len(gt_trajectory) > 2:
+        for i in range(2, len(gt_trajectory)):
+            x1_gt, z1_gt = gt_trajectory[i - 1]
+            x2_gt, z2_gt = gt_trajectory[i]
+            x1_gt_plot, z1_gt_plot = int((x1_gt + x_shift) * scale), int((z_shift - z1_gt) * scale)  # Invert z-axis
+            x2_gt_plot, z2_gt_plot = int((x2_gt + x_shift) * scale), int((z_shift - z2_gt) * scale)  # Invert z-axis
+            cv2.line(traj_canvas, (x1_gt_plot, z1_gt_plot), (x2_gt_plot, z2_gt_plot), (255, 255, 0), 1)  # Magenta line
 
     # Plot the trajectory as a line if there are enough points
     if len(camera_trajectory) > 2:
         for i in range(2, len(camera_trajectory)):
             x1, z1 = camera_trajectory[i - 1]
             x2, z2 = camera_trajectory[i]
-            x1_plot, z1_plot = int((x1 + x_shift) * scale), int((z1 + z_shift) * scale)
-            x2_plot, z2_plot = int((x2 + x_shift) * scale), int((z2 + z_shift) * scale)
-            cv2.line(traj_canvas, (x1_plot, z1_plot), (x2_plot, z2_plot), (0, 255, 0), 1)
+            x1_plot, z1_plot = int((x1 + x_shift) * scale), int((z_shift - z1) * scale)  # Invert z-axis
+            x2_plot, z2_plot = int((x2 + x_shift) * scale), int((z_shift - z2) * scale)  # Invert z-axis
+            cv2.line(traj_canvas, (x1_plot, z1_plot), (x2_plot, z2_plot), (255, 0, 255), 1)
     
-    # Plot the ground truth trajectory if available
-    if len(gt_trajectory) > 2:
-        for i in range(2, len(gt_trajectory)):
-            x1_gt, z1_gt = gt_trajectory[i - 1]
-            x2_gt, z2_gt = gt_trajectory[i]
-            x1_gt_plot, z1_gt_plot = int((x1_gt + x_shift) * scale), int((z1_gt + z_shift) * scale)
-            x2_gt_plot, z2_gt_plot = int((x2_gt + x_shift) * scale), int((z2_gt + z_shift) * scale)
-            cv2.line(traj_canvas, (x1_gt_plot, z1_gt_plot), (x2_gt_plot, z2_gt_plot), (255, 0, 255), 1)  # Magenta line
 
-    
-    # Add title and labels
+    # Add title, labels, and legends
     cv2.putText(traj_canvas, f"Frame: {frame_index}", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
     cv2.putText(traj_canvas, "X-axis", (traj_canvas.shape[1] - 70, traj_canvas.shape[0] - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
     cv2.putText(traj_canvas, "Z-axis", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+
+    # Legends for Trajectory plot
+    legend_x, legend_y = 700, 30
+    legend_gap = 20
+    cv2.rectangle(traj_canvas, (legend_x, legend_y), (legend_x + 15, legend_y + 15), (255, 0, 0), -1)
+    cv2.putText(traj_canvas, "Landmarks", (legend_x + 25, legend_y + 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+
+    cv2.circle(traj_canvas, (legend_x + 7, legend_y + 30), 5, (255, 0, 255), -1)
+    cv2.putText(traj_canvas, "Camera Position", (legend_x + 25, legend_y + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+    cv2.line(traj_canvas, (legend_x, legend_y + 50), (legend_x + 15, legend_y + 50), (255, 0, 255), 2)
+    cv2.putText(traj_canvas, "Camera Trajectory", (legend_x + 25, legend_y + 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+
+    cv2.circle(traj_canvas, (legend_x + 7, legend_y + 70), 5, (255, 255, 0), -1)
+    cv2.putText(traj_canvas, "Ground Truth Position", (legend_x + 25, legend_y + 75), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+    cv2.line(traj_canvas, (legend_x, legend_y + 90), (legend_x + 15, legend_y + 90), (255, 255, 0), 2)
+    cv2.putText(traj_canvas, "Ground Truth Trajectory", (legend_x + 25, legend_y + 95), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+
+    cv2.circle(traj_canvas, (legend_x + 7, legend_y + 110), 5, (0, 0, 255), -1)
+    cv2.line(traj_canvas, (legend_x+7, legend_y + 110), (legend_x + 20, legend_y + 110), (0, 0, 255), 2)
+    cv2.putText(traj_canvas, "Candidate Keypoints", (legend_x + 25, legend_y + 115), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+    cv2.circle(traj_canvas, (legend_x + 7, legend_y + 130), 5, (0, 255, 0), -1)
+    cv2.line(traj_canvas, (legend_x+7, legend_y + 130), (legend_x + 20, legend_y + 130), (0, 255, 0), 2)
+    cv2.putText(traj_canvas, "Tracked Keypoints", (legend_x + 25, legend_y + 135), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
     # Create a blank canvas for the keypoints plot
     keypoints_canvas = cv2.cvtColor(img2, cv2.COLOR_GRAY2BGR)
@@ -80,8 +108,8 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     # Plot candidate keypoints and displacements
     if continuous.S['C'] is not None and continuous.S['C'].shape[1] > 0:
         for candidate, first_point in zip(continuous.S['C'].T, continuous.S['F'].T):
-            cv2.circle(keypoints_canvas, tuple(candidate.astype(int)), 3, (255, 0, 0), -1)  # Blue points
-            cv2.line(keypoints_canvas, tuple(first_point.astype(int)), tuple(candidate.astype(int)), (255, 0, 0), 1)
+            cv2.circle(keypoints_canvas, tuple(candidate.astype(int)), 3, (0, 0, 255), -1)  # Blue points
+            cv2.line(keypoints_canvas, tuple(first_point.astype(int)), tuple(candidate.astype(int)), (0, 0, 255), 1)
 
     # Plot tracked keypoints and displacements
     for p1, p2 in zip(old_pts, next_pts):
@@ -95,10 +123,9 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     combined_canvas = np.zeros((max(traj_canvas.shape[0], keypoints_canvas.shape[0]), combined_width, 3), dtype=np.uint8)
     combined_canvas[:traj_canvas.shape[0], 20:20 + traj_canvas.shape[1]] = traj_canvas
     combined_canvas[:keypoints_canvas.shape[0], traj_canvas.shape[1] + 40:] = keypoints_canvas
-    # print("combined_canvas",combined_canvas.shape)
-    # print("traj_canvas",traj_canvas.shape)
+
     # Resize and display
-    scale_factor = 1  # Adjust the scale factor as needed
+    scale_factor = 0.8  # Adjust the scale factor as needed
     scaled_canvas = cv2.resize(combined_canvas, (0, 0), fx=scale_factor, fy=scale_factor)
     cv2.imshow('Trajectory and Keypoints', scaled_canvas)
     video_writer.write(scaled_canvas)
@@ -108,6 +135,7 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
         return False
 
     return True
+
 
 # def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, frame_index):
 #     # Create a blank canvas for the trajectory plot
