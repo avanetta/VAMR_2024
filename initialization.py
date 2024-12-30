@@ -106,7 +106,7 @@ def initialization(img1, img2, img3, ds,  self):
         if ds == 2:
             points_3D = -points_3D
         if ds == 3:
-            distance_threshold = 100
+            distance_threshold = 50
             #filter out points that are far away
             mask_to_keep = np.abs(points_3D[2,:]) < distance_threshold
             points_3D = points_3D[:,mask_to_keep]

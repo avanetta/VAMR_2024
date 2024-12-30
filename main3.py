@@ -12,7 +12,7 @@ from initialization import initialization
 #import threading
 from video_generator1 import plot_and_generate_video
 def main():
-    ds = 1 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
+    ds = 3 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
 
     if ds == 0:
         # KITTI dataset setup with given intialization
@@ -131,7 +131,7 @@ def main():
 
     # Plot the initial frame with the keypoints
     
-    continuous.plot_keypoints(initial_frame, initial_frame, continuous.S['P'], continuous.S['P'])
+    #continuous.plot_keypoints(initial_frame, initial_frame, continuous.S['P'], continuous.S['P'])
 
     # if ds == 0:
     #     # Show keypoints in frame 1 and 2
