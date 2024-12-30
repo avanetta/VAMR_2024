@@ -8,8 +8,8 @@ from matplotlib import pyplot as plt
 plt.rcParams['figure.max_open_warning'] = 0
 from initialization import initialization
 # from video_generator import *
-from multiprocessing import Pool
-import threading
+#from multiprocessing import Pool
+#import threading
 from video_generator1 import plot_and_generate_video
 def main():
     ds = 1 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
@@ -33,7 +33,7 @@ def main():
         img3= cv2.imread(os.path.join(kitti_path, "05/image_0/000002.png"), cv2.IMREAD_GRAYSCALE)
 
         continuous = Continuous_operation(K)
-
+        continuous.S['DS'] = 0
         p_W_landmarks = np.loadtxt(os.path.join(kitti_path, "p_W_landmarks.txt"), dtype = np.float32).T
         keypoints = np.loadtxt(os.path.join(kitti_path, "keypoints.txt"), dtype = np.float32)
         keypoints[:, [0, 1]] = keypoints[:, [1, 0]] # SEHER SEHR WICHTIG HAHA
@@ -42,7 +42,7 @@ def main():
         print("Keypoints_init shape", keypoints.shape)
         print("landmarks shape_init", p_W_landmarks.shape)
 
-    if ds == 1:
+    elif ds == 1:
         # KITTI dataset setup with implemented initialization
         kitti_path = "kitti05/kitti"  # Specify the KITTI dataset path
         ground_truth = np.loadtxt(os.path.join(kitti_path, "poses/05.txt"))  # 05.txt goes with image_0, 
@@ -70,9 +70,10 @@ def main():
     
         # Initialize the continuous operation class
         continuous = Continuous_operation(K)
+        continuous.S['DS'] = 1
         keypoints,p_W_landmarks = initialization(img1, img2, img3, ds,  continuous)
         print("landmarks shape_init", p_W_landmarks.shape)
-    if ds == 2:
+    elif ds == 2:
         # Malaga dataset setup
         malaga_path = "malaga"  # Specify the Malaga dataset path
         
@@ -98,12 +99,13 @@ def main():
         if img1 is None or img2 is None or img3 is None:
             raise ValueError("One or more images could not be loaded.")
         continuous = Continuous_operation(K)
+        continuous.S['DS'] = 2
         keypoints,p_W_landmarks = initialization(img1, img2, img3, ds,  continuous)
         print("landmarks shape_init", p_W_landmarks.shape)
 
             
-    if ds == 3:
-        parking_path = "parking"  # Specify the KITTI dataset path
+    elif ds == 3:
+        parking_path = "parking"  # Specify the parking dataset path
         ground_truth = np.loadtxt(os.path.join(parking_path, "poses.txt"))
         gt_matrices = ground_truth.reshape(-1, 3, 4)
         last_frame = 599
@@ -117,15 +119,19 @@ def main():
         img2 = cv2.imread(os.path.join(parking_path, "images/img_00001.png"), cv2.IMREAD_GRAYSCALE)
         img3= cv2.imread(os.path.join(parking_path, "images/img_00002.png"), cv2.IMREAD_GRAYSCALE)
         continuous = Continuous_operation(K)
+        continuous.S['DS'] = 3
         keypoints,p_W_landmarks = initialization(img1, img2, img3, ds, continuous)
     
     #print("landmarks shape_init", p_W_landmarks.shape)
-        
+    
+    print("Keypoints_init shape", keypoints.shape)
 
     continuous.S['X'] = p_W_landmarks
     continuous.S['P'] = keypoints
 
-    # continuous.plot_keypoints(initial_frame, initial_frame, continuous.S['P'], continuous.S['P'])
+    # Plot the initial frame with the keypoints
+    
+    continuous.plot_keypoints(initial_frame, initial_frame, continuous.S['P'], continuous.S['P'])
 
     # if ds == 0:
     #     # Show keypoints in frame 1 and 2

@@ -1,9 +1,8 @@
 import cv2
 import numpy as np
-import os #TODO Remove
 from scipy.spatial.transform import Rotation as R
 from matplotlib import pyplot as plt
-from continous_operation import Continuous_operation #TODO REMOVE
+#from continous_operation import Continuous_operation #TODO REMOVE
 
 
 def initialization(img1, img2, img3, ds,  self):
@@ -11,18 +10,22 @@ def initialization(img1, img2, img3, ds,  self):
         # Parameters
         number_matches = 1000  # it selects the number_matches best matches to go on
         feature_params = dict(maxCorners=number_matches, qualityLevel=0.015, minDistance=17)
-    elif ds == 1:
+        lk_params = dict(winSize=(21, 21), maxLevel=3, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.1))
+    elif ds == 1:#KITTI with implemented initialization
          # Parameters
         number_matches = 1000  # it selects the number_matches best matches to go on
         feature_params = dict(maxCorners=number_matches, qualityLevel=0.015, minDistance=15)
-    elif ds == 2:
+        lk_params = dict(winSize=(21, 21), maxLevel=3, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.1))
+    elif ds == 2: #Malaga
         # Parameters
         number_matches = 1000
         feature_params = dict(maxCorners=number_matches, qualityLevel=0.01, minDistance=10)
-    elif ds == 3:
+        lk_params = dict(winSize=(21, 21), maxLevel=3, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.1))
+    elif ds == 3:#Parking
         # Parameters
-        number_matches = 1000
-        feature_params = dict(maxCorners=number_matches, qualityLevel=0.01, minDistance=10)
+        number_matches = 5000
+        feature_params = dict(maxCorners=number_matches, qualityLevel=0.005, minDistance=10)
+        lk_params = dict(winSize=(31, 31), maxLevel=3, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 0.03))
     # Step 1: Detect keypoints in the first image using goodFeaturesToTrack
     
     kp1 = cv2.goodFeaturesToTrack(img1, mask=None, **feature_params)
@@ -31,7 +34,7 @@ def initialization(img1, img2, img3, ds,  self):
     kp1 = np.float32(kp1).reshape(-1, 1, 2)
 
     # Step 2: Track keypoints in the second image using calcOpticalFlowPyrLK
-    lk_params = dict(winSize=(21, 21), maxLevel=3, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.1))
+   
     kp2, st1, err1 = cv2.calcOpticalFlowPyrLK(img1, img2, kp1, None, **lk_params)
     
     
@@ -62,7 +65,16 @@ def initialization(img1, img2, img3, ds,  self):
     first_pose = self.K @ first_pose
     #Step 4: Use RANSAC with Fundamental Matrix
     if src_pts.shape[0] >= 8:  # Minimum points for RANSAC
-        F, mask = cv2.findFundamentalMat(src_pts, dst_pts, cv2.FM_RANSAC, 1.0, 0.99)
+        if ds== 0 or ds== 1:
+            distThresh = 1.0
+            confidence = 0.99
+        elif ds == 2:
+            distThresh = 1.0
+            confidence = 0.99 
+        elif ds == 3: 
+            distThresh = 2.0
+            confidence = 0.99
+        F, mask = cv2.findFundamentalMat(src_pts, dst_pts, cv2.FM_RANSAC, distThresh, confidence)
         matches_mask = mask.ravel()
 
         E = self.K.T @ F @ self.K
@@ -89,7 +101,21 @@ def initialization(img1, img2, img3, ds,  self):
         #np.savetxt('points_4d.txt', points_4D, fmt='%.6f', delimiter=' ')
         #print("4d Points shape", points_4D.shape)
         points_3D = points_4D[:3,:] / points_4D[3, :]
-        points_3D = -points_3D
+        if ds== 0 or ds== 1:
+            points_3D = -points_3D
+        if ds == 2:
+            points_3D = -points_3D
+        if ds == 3:
+            distance_threshold = 100
+            #filter out points that are far away
+            mask_to_keep = np.abs(points_3D[2,:]) < distance_threshold
+            points_3D = points_3D[:,mask_to_keep]
+            keypoints = keypoints[mask_to_keep,:]
+
+            #flip negative z values
+            mask_negative = points_3D[2,:] < 0
+
+            points_3D[:, mask_negative] = -points_3D[:, mask_negative]
         #print("3D Points shape:", points_3D.shape)
 
 
@@ -98,25 +124,26 @@ def initialization(img1, img2, img3, ds,  self):
         matches_mask = None
         raise ValueError("Not enough source_points")
     
+    np.savetxt('points_3d.txt', points_3D.T, fmt='%.6f', delimiter=' ')
     """
     #####  DEBUG HELP ######
-    #np.savetxt('points_3d.txt', points_3D.T, fmt='%.6f', delimiter=' ')
+    np.savetxt('points_3d.txt', points_3D.T, fmt='%.6f', delimiter=' ')
     kitti_path =  "kitti05/kitti"
     ## Load Kitti p_W_landmarks and keypoints.txt
     p_W_landmarks_truth = np.loadtxt(os.path.join(kitti_path, "p_W_landmarks.txt"), dtype = np.float32).T
 
     #print("landmarks shape", p_W_landmarks.shape)
     keypoints_truth = np.loadtxt(os.path.join(kitti_path, "keypoints.txt"), dtype = np.float32)
-
+    
     keypoints_truth[:,[0,1]]= keypoints_truth[:,[1,0]]
-
+    
     # Draw keypoints (white)
     for (x, y) in keypoints:
         cv2.circle(img1, (int(x), int(y)), radius=5, color=(255, 255, 255), thickness=-1)
 
-    # Draw keypoints_truth (black)
-    for (x, y) in keypoints_truth:
-        cv2.circle(img1, (int(x), int(y)), radius=5, color=(0, 0, 0), thickness=-1)
+   # #Draw keypoints_truth (black)
+   # for (x, y) in keypoints_truth:
+   #     cv2.circle(img1, (int(x), int(y)), radius=5, color=(0, 0, 0), thickness=-1)
 
     # Display the image with Matplotlib
     plt.figure(figsize=(8, 6))
@@ -124,13 +151,13 @@ def initialization(img1, img2, img3, ds,  self):
     plt.axis('off')
 
     # Add a legend
-    plt.scatter([], [], c='white', label='Keypoints')
-    plt.scatter([], [], c='black', label='Keypoints Truth')
-    plt.legend(loc='upper right', fontsize='large', markerscale=2)
+    #plt.scatter([], [], c='white', label='Keypoints')
+    #plt.scatter([], [], c='black', label='Keypoints Truth')
+    #plt.legend(loc='upper right', fontsize='large', markerscale=2)
 
     plt.title("Keypoints and Keypoints Truth")
     plt.show()
-
+    
     # Assuming keypoints (Nx2) and keypoints_truth (Mx2) are defined
     tolerance = 2
     tolerance_land =1
@@ -147,7 +174,7 @@ def initialization(img1, img2, img3, ds,  self):
     count_key = np.sum(np.any(matches_key, axis=1))
 
     distances = np.sqrt(((points_3D[:, :, np.newaxis] - p_W_landmarks_truth[:, np.newaxis, :])**2).sum(axis=0))
-   # Boolean mask for distances below the tolerance
+    # Boolean mask for distances below the tolerance
     below_tolerance_mask = distances < tolerance_land
 
     # Count the number of elements below the tolerance
