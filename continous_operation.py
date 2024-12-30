@@ -18,7 +18,10 @@ class Continuous_operation:
         lk_params = dict(winSize=(11, 11), maxLevel=2,
                          criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.1))
         old_pts = self.S['P'].T #keypoints 577x2
-        next_pts, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_frame, self.S['P'].T, None, **lk_params)
+        pts_to_track = old_pts.reshape(-1, 1, 2) #577x1x2
+        next_pts, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_frame, pts_to_track, None, **lk_params)
+        next_pts = next_pts.reshape(-1, 2) #577x2
+
         """
           DEBUG HELP
           
@@ -31,7 +34,7 @@ class Continuous_operation:
         next_pts[:,[0,1]]= next_pts[:,[1,0]]
         """
         valid = status.flatten()==1
-
+       
         if np.all(valid == 0):
             print("The 'valid' array is an array of zeros.")
 
@@ -40,7 +43,8 @@ class Continuous_operation:
         # self.S['P'] = next_pts[valid].T
         old_pts = old_pts[valid]
         next_pts = next_pts[valid]
-
+        print(f"After KLT Tracking from {pts_to_track.shape[0]} to {next_pts.shape[0]} keypoints")
+        
 
         return old_pts, next_pts, valid 
 
@@ -125,7 +129,7 @@ class Continuous_operation:
                     tracked_pts = tracked_pts[inlier_mask]
                     new_keypoints = new_keypoints[inlier_mask]
                 """
-                    # Update candidates after RANSAC
+                # Update candidates after RANSAC
                 # for kp in tracked_pts:
                 for kp in new_keypoints:
                     self.S['C'] = (
@@ -181,12 +185,12 @@ class Continuous_operation:
 
 
 
-    def triangulate_new_landmarks(self, old_pts, next_pts, T, curr_frame):
+    def triangulate_new_landmarks(self, next_pts, T, curr_frame):
         """
         Triangulate new landmarks from candidate keypoints and their tracks.
         """
         if self.S['C'] is None or self.S['C'].shape[1] == 0:
-            return old_pts, next_pts
+            return next_pts
 
         # Initialize storage for new landmarks and keypoints
         new_landmarks = np.empty((3, 0))
@@ -286,10 +290,14 @@ class Continuous_operation:
                 points_3d = points_4d[:3] / points_4d[3]  # Convert from homogeneous to 3D
                 
                 # filter out points with negative depth
-                mask_positive_depth = points_3d[2, :] > 0  # Apply condition to all elements along axis 1
+                mask_negative_depth = points_3d[2, :] < 0  # Apply condition to all elements along axis 1
                 print("Group size: ", size)
-                print("Mask Positive Depth: ", len(mask_positive_depth))
-                points_3d = points_3d[:, mask_positive_depth]
+                print("After angle limitation ", len(mask_negative_depth))
+                #print("After pos. depth ", np.sum(mask_negative_depth))
+                
+                points_3d[:, mask_negative_depth] *= -1
+                current_observation = current_triangulation
+                """
                 current_observation = current_triangulation[mask_positive_depth, :]
                 # Update the mask to keep the valid depth points
                 relevant_range = mask_to_keep[start_col:start_col + size]
@@ -300,6 +308,7 @@ class Continuous_operation:
 
                 first_triangulation = first_triangulation[mask_positive_depth, :]
                 current_triangulation = current_triangulation[mask_positive_depth, :]   
+                """
                 if REJECT_ERRORS and points_3d.shape[1] > 0: 
                     # Reproject back into 2D image space
                     points_2d_proj1 = cv2.projectPoints(points_3d.T, R_vec_first, T_vec_first, self.K , None)[0].squeeze()
@@ -345,32 +354,19 @@ class Continuous_operation:
 
 
         # Update state with new landmarks and keypoints
-        if new_landmarks.size > 0: 
-
-            #new_landmarks = np.hstack(new_landmarks) if len(new_landmarks) > 0 else np.empty((3, 0))
-            #new_keypoints = np.array(new_keypoints).T  # Convert to 2D array of shape (2, N)
-
-            
-            # # Perform RANSAC to remove outliers based on 3D landmark position
-            # new_landmarks_transposed = new_landmarks.T
-            # ransac_inliers = self.ransac_filter_3d_landmarks(new_landmarks_transposed)
-            # new_landmarks = new_landmarks[:, ransac_inliers]
-            # new_keypoints = new_keypoints[:, ransac_inliers]
-
+        if new_landmarks.size > 0:
             
             self.S['X'] = np.hstack((self.S['X'], new_landmarks)) if self.S['X'] is not None else np.array(new_landmarks).T
             self.S['P'] = np.hstack((self.S['P'], new_keypoints)) if self.S['P'] is not None else np.array(new_keypoints).T
-            old_pts = np.hstack((old_pts.T, new_keypoints)) if old_pts is not None else np.array(new_keypoints).T
+            #old_pts = np.hstack((old_pts.T, new_keypoints)) if old_pts is not None else np.array(new_keypoints).T
             next_pts = np.hstack((next_pts.T, new_keypoints)) if next_pts is not None else np.array(new_keypoints).T   
-            old_pts = old_pts.T
+            #old_pts = old_pts.T
             next_pts = next_pts.T
-            # self.S['C'] = None
-            # self.S['F'] = None
-            # self.S['T'] = None
-            # self.S['R'] = None
+            
 
         else:
-            old_pts = old_pts
+            #old_pts = old_pts
+
             next_pts = next_pts
         # Remove triangulated keypoints from candidates
         self.S['C'] = self.S['C'][:, mask_to_keep]
@@ -378,7 +374,7 @@ class Continuous_operation:
         self.S['T'] = self.S['T'][:, mask_to_keep]
         self.S['R'] = self.S['R'][:, mask_to_keep]
 
-        return old_pts, next_pts
+        return next_pts
         
     # Final function to estimate pose and track keypoints
     def process_frame(self, past_frame, curr_frame):
@@ -393,17 +389,15 @@ class Continuous_operation:
 
         # Estimate fundamental matrix
         F, inliers, next_pts, old_pts = self.ransac(next_pts, old_pts)
-    
 
         # Estimate pose PART 4.2
         T, inliers, pose = self.pose_estimation_PnP_Ransac(next_pts)
         inliers = inliers.flatten()
 
-        selected_pts = next_pts[inliers]
-        next_pts = selected_pts
+        next_pts = next_pts[inliers]
 
-        old_pts1 = old_pts[inliers]
-        old_pts = old_pts1
+        old_pts = old_pts[inliers]
+        
         landmarks3D = self.S['X'][:, inliers]
         self.S['X'] = landmarks3D
         self.S['P'] = next_pts.T
@@ -417,9 +411,10 @@ class Continuous_operation:
 
             self.KLT_for_new_candidates(past_frame, curr_frame)
         # Triangulate new landmarks
+
         #WICHTIG vor dem adden von neuen candidates zuerst traingulieren, mit den über mehrere Frames getrackten keypoints
 
-        old_pts, next_pts = self.triangulate_new_landmarks(old_pts, next_pts, T, curr_frame)
+        next_pts = self.triangulate_new_landmarks(next_pts, T, curr_frame)
 
         # Monitor keypoint count
         if self.S['P'].shape[1] < 300 and (self.S['C'] is None or self.S['C'].shape[1] < 100):  # Threshold for the minimum number of keypoints
