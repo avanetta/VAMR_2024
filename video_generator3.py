@@ -6,7 +6,7 @@
 import cv2
 import numpy as np
 
-def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, frame_index, gt_matrices, gt_trajectory):
+def plot_and_generate_video_3(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, frame_index, gt_matrices, gt_trajectory):
     # Create a blank canvas for the trajectory plot
     traj_canvas = np.ones((800, 1000, 3), dtype=np.uint8) * 255
 
@@ -15,9 +15,11 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     camera_position = pose[:3, 3]
     x, z = camera_position[0], camera_position[2]
     camera_trajectory.append((x, z))
-    gt_position = gt_matrices[frame_index][:3, 3]
-    x_gt, z_gt = gt_position[0], gt_position[2]
-    gt_trajectory.append((x_gt, z_gt))
+
+    # No gt position known in Malaga
+    # gt_position = gt_matrices[frame_index][:3, 3]
+    # x_gt, z_gt = gt_position[0], gt_position[2]
+    # gt_trajectory.append((x_gt, z_gt))
     
     # Scale and shift for visualization
     scale = 1.2
@@ -49,10 +51,10 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     z_plot = int((z_shift - z) * scale)  # Invert z-axis
     cv2.circle(traj_canvas, (x_plot, z_plot), 4, (255, 0, 255), -1)  # Red point for the camera
 
-    # Plot the GT position
-    x_plot_gt = int((x_gt + x_shift) * scale)
-    z_plot_gt = int((z_shift - z_gt) * scale)  # Invert z-axis
-    cv2.circle(traj_canvas, (x_plot_gt, z_plot_gt), 4, (255, 255, 0), -1)  # Red point for the camera
+    # # Plot the GT position
+    # x_plot_gt = int((x_gt + x_shift) * scale)
+    # z_plot_gt = int((z_shift - z_gt) * scale)  # Invert z-axis
+    # cv2.circle(traj_canvas, (x_plot_gt, z_plot_gt), 4, (255, 255, 0), -1)  # Red point for the camera
 
     # Plot the ground truth trajectory if available
     if len(gt_trajectory) > 2:

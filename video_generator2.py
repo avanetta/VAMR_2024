@@ -123,8 +123,8 @@ def plot_and_generate_video_2(continuous, pose, camera_trajectory, img2, next_pt
     combined_canvas = np.zeros((max(traj_canvas.shape[0], keypoints_canvas.shape[0]), combined_width, 3), dtype=np.uint8)
     combined_canvas[:traj_canvas.shape[0], 20:20 + traj_canvas.shape[1]] = traj_canvas
     combined_canvas[:keypoints_canvas.shape[0], traj_canvas.shape[1] + 40:] = keypoints_canvas
-    print("combined_canvas shape", combined_canvas.shape)
-    print("traj_canvas shape", traj_canvas.shape)
+    # print("combined_canvas shape", combined_canvas.shape)
+    # print("traj_canvas shape", traj_canvas.shape)
     # Resize and display
     scale_factor = 1  # Adjust the scale factor as needed
     scaled_canvas = cv2.resize(combined_canvas, (0, 0), fx=scale_factor, fy=scale_factor)

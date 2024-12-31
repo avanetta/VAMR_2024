@@ -15,6 +15,7 @@ from initialization_2 import initialization
 #import threading
 from video_generator1 import plot_and_generate_video #for Kitti
 from video_generator2 import plot_and_generate_video_2 #for Parking
+from video_generator3 import plot_and_generate_video_3 #for Malaga
 
 def main():
     ds = 1 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
@@ -78,6 +79,7 @@ def main():
         continuous.S['DS'] = 1
         keypoints,p_W_landmarks = initialization(img1, img2, img3, ds,  continuous)
         print("landmarks shape_init", p_W_landmarks.shape)
+
     elif ds == 2:
         # Malaga dataset setup
         malaga_path = "malaga"  # Specify the Malaga dataset path
@@ -95,10 +97,35 @@ def main():
         K = np.array([[621.18428, 0 ,404.0076],
         [0, 621.18428, 309.05989],
         [0, 0 ,1]])
+        
         # Load the first three images
-        img1 = cv2.imread(left_images[0])
-        img2 = cv2.imread(left_images[1])
-        img3 = cv2.imread(left_images[2])
+        img1 = cv2.imread(left_images[0], cv2.IMREAD_GRAYSCALE)
+        img2 = cv2.imread(left_images[1], cv2.IMREAD_GRAYSCALE)
+        img3 = cv2.imread(left_images[2], cv2.IMREAD_GRAYSCALE)
+
+        # Since for MALAGA we are not given the poses, we directy extract the whole groundtruth
+        # Initialize an empty list to store (x, y, z) tuples
+        gt_trajectory = []
+        gt_matrices = []
+
+        # Open the GPS data file and only extract local x, y, z values
+        gps_path = os.path.join(malaga_path, "malaga-urban-dataset-extract-07_all-sensors_GPS.txt")
+        with open(gps_path, "r") as file:
+            for line in file:
+                # Skip lines starting with '%' (headers or comments)
+                if line.startswith('%'):
+                    continue
+                
+                # Split the line into columns
+                columns = line.split()
+                
+                # Extract Local X, Local Y, and Local Z (9th, 10th, and 11th columns, 0-based index)
+                local_x = float(columns[8])
+                local_y = float(columns[9])
+                # local_z = float(columns[10])
+                
+                # Append the extracted values as a tuple
+                gt_trajectory.append((local_x, local_y))
 
         # Optionally, check if the images were loaded correctly
         if img1 is None or img2 is None or img3 is None:
@@ -147,11 +174,13 @@ def main():
 
     if continuous.S['DS'] == 3:
         S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img3)
+        continuous.plot_keypoints_and_displacements(img1, img3, old_pts, next_pts)
     else:
         S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img2)
+        continuous.plot_keypoints_and_displacements(img1, img2, old_pts, next_pts)
 
 
-    continuous.plot_keypoints_and_displacements(img1, img3, old_pts, next_pts)
+    
     
     #img1 = img2
   
@@ -162,6 +191,8 @@ def main():
     #video_writer = cv2.VideoWriter('camera_trajectory_video.avi', fourcc, 2.0, (2266, 800))
     if ds == 0 or ds == 1:
         video_writer = cv2.VideoWriter('camera_trajectory_video.avi', fourcc, 30.0, (2266, 800))
+    if ds == 2:
+        video_writer = cv2.VideoWriter('camera_trajectory_video.avi', fourcc, 30.0, (2266, 800))
     if ds == 3:
         video_writer = cv2.VideoWriter('camera_trajectory_video.avi', fourcc, 10.0, (1480, 480))
 
@@ -170,8 +201,11 @@ def main():
     poses.append
     camera_trajectory = []
     camera_trajectory.append(T_total[:3, 3])
-    gt_trajectory = []
-    gt_trajectory.append(gt_matrices[0][:3, 3])
+
+    if continuous.S['DS'] != 2:
+        gt_trajectory = []
+        gt_trajectory.append(gt_matrices[0][:3, 3])
+
     #with Pool() as pool:
     # Start the loop from frame 2
     for i in range(1, last_frame):
@@ -211,6 +245,9 @@ def main():
         #pool.apply_async(plot_and_generate_video, (continuous, pose, camera_trajectory, img2, next_pts, old_pts, i))
         if continuous.S['DS'] == 0 or continuous.S['DS'] == 1:
             if not plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, i, gt_matrices, gt_trajectory):
+                break
+        if continuous.S['DS'] == 2:
+            if not plot_and_generate_video_3(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, i, gt_matrices, gt_trajectory):
                 break
         if continuous.S['DS'] == 3:
             if not plot_and_generate_video_2(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, i, gt_matrices, gt_trajectory):
