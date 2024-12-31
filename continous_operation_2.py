@@ -284,7 +284,7 @@ class Continuous_operation:
         # ------------------------------------------------------------
         # 1) Angle threshold logic
         if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
-            min_keypoint_threshold = 0 
+            min_keypoint_threshold = 20 
             angle_threshold_default = np.deg2rad(0.65)  # ~37 deg
             angle_threshold_relaxed = np.deg2rad(0.24)  # ~14 deg
             baseline_threshold = 5.0

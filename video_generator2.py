@@ -80,7 +80,7 @@ def plot_and_generate_video_2(continuous, pose, camera_trajectory, img2, next_pt
     cv2.putText(traj_canvas, "Z-axis", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
 
     # Legends for Trajectory plot
-    legend_x, legend_y = 700, 30
+    legend_x, legend_y = 575, 30
     legend_gap = 20
     cv2.rectangle(traj_canvas, (legend_x, legend_y), (legend_x + 15, legend_y + 15), (255, 0, 0), -1)
     cv2.putText(traj_canvas, "Landmarks", (legend_x + 25, legend_y + 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)

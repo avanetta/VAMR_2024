@@ -13,8 +13,8 @@ from initialization_2 import initialization
 # from video_generator import *
 #from multiprocessing import Pool
 #import threading
-from video_generator1 import plot_and_generate_video
-from video_generator2 import plot_and_generate_video_2
+from video_generator1 import plot_and_generate_video #for Kitti
+from video_generator2 import plot_and_generate_video_2 #for Parking
 
 def main():
     ds = 1 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
@@ -145,8 +145,11 @@ def main():
     #     img1 = initial_frame
     #     img2 = cv2.imread(os.path.join(kitti_path, "05/image_01/000001.png"), cv2.IMREAD_GRAYSCALE)
 
+    if continuous.S['DS'] == 3:
+        S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img3)
+    else:
+        S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img2)
 
-    S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img3)
 
     continuous.plot_keypoints_and_displacements(img1, img3, old_pts, next_pts)
     
@@ -171,7 +174,7 @@ def main():
     gt_trajectory.append(gt_matrices[0][:3, 3])
     #with Pool() as pool:
     # Start the loop from frame 2
-    for i in range(2, last_frame):
+    for i in range(1, last_frame):
         # Load the next frame
         if ds == 0:
             img2 = cv2.imread(os.path.join(kitti_path, "05/image_0/{:06d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
