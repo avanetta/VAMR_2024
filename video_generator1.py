@@ -125,7 +125,7 @@ def plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts,
     combined_canvas[:keypoints_canvas.shape[0], traj_canvas.shape[1] + 40:] = keypoints_canvas
 
     # Resize and display
-    scale_factor = 0.8  # Adjust the scale factor as needed
+    scale_factor = 1  # Adjust the scale factor as needed
     scaled_canvas = cv2.resize(combined_canvas, (0, 0), fx=scale_factor, fy=scale_factor)
     cv2.imshow('Trajectory and Keypoints', scaled_canvas)
     video_writer.write(scaled_canvas)

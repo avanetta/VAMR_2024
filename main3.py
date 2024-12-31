@@ -12,7 +12,7 @@ from initialization import initialization
 #import threading
 from video_generator1 import plot_and_generate_video
 def main():
-    ds = 3 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
+    ds = 1 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
 
     if ds == 0:
         # KITTI dataset setup with given intialization
@@ -151,7 +151,7 @@ def main():
     # continuous.plot_pose_and_landmarks_2D(T_total, continuous.S['X'])
 
     fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Codec for video (XVID is a popular codec)
-    video_writer = cv2.VideoWriter('camera_trajectory_video.avi', fourcc, 2.0, (2266, 800))
+    video_writer = cv2.VideoWriter('camera_trajectory_video.avi', fourcc, 30.0, (2266, 800))
 
     poses = []
     poses.append(T_total)

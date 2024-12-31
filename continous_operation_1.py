@@ -507,7 +507,8 @@ class Continuous_operation:
             # Detect new keypoints using Shi-Tomasi (Good Features to Track)
             self.add_new_candidates(curr_frame, T)
         
-        print("Number of candidates after adding new candidates:", self.S['C'].shape[1])
+        if self.S['C'] is not None:
+            print("Number of candidates after adding new candidates:", self.S['C'].shape[1])
         
         
 
