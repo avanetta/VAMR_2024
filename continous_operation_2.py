@@ -106,15 +106,15 @@ class Continuous_operation:
     # Hier DIE BAUSTELLE LEIDER NOCH NICHT FERTIG
 
     def add_new_candidates(self, curr_frame, T):
-        print("Adding new candidates")
+        #print(f"ADDING NEW CANDIDATES")
         if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
             max_corners = 2000
             quality_level = 0.005
             min_distance = 15
         if self.S['DS']== 2: #Parameters for Malaga
-            max_corners = 2000
-            quality_level = 0.015
-            min_distance = 10
+            max_corners = 1000
+            quality_level = 0.005
+            min_distance = 17
         if self.S['DS']== 3: #Parameters for parking
             max_corners = 400
             quality_level = 0.0001
@@ -122,6 +122,7 @@ class Continuous_operation:
 
         new_keypoints = cv2.goodFeaturesToTrack(curr_frame, max_corners, quality_level, min_distance)
 
+        #(f"Found {len(new_keypoints)} new keypoints!")
 
         if new_keypoints is not None:
             new_keypoints = np.squeeze(new_keypoints, axis=1)  # Convert to Nx2 array
@@ -131,14 +132,23 @@ class Continuous_operation:
             valid_new_keypoints = []
             for kp in new_keypoints:
                 distances = np.linalg.norm(current_keypoints - kp, axis=1)
+
                 if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
                     if np.min(distances) > 10:  # Minimum distance threshold
                         valid_new_keypoints.append(kp)
+
+                if self.S['DS']== 2: #Parameters for Malaga
+                    if np.min(distances) > 10:  # Minimum distance threshold
+                        valid_new_keypoints.append(kp)
+
                 if self.S['DS']== 3: #Parameters for parking
                     if np.min(distances) > 30:  # Minimum distance threshold
                         valid_new_keypoints.append(kp)
+
+
             new_keypoints = np.array(valid_new_keypoints)
             
+            # print(f"Found {new_keypoints.size} new keypoints.")
 
             # Add valid new keypoints to candidates
             if new_keypoints.size > 0:
@@ -181,6 +191,7 @@ class Continuous_operation:
 
 
     def KLT_for_new_candidates(self, past_frame, curr_frame):
+            #print(f"KLT for new candidates")
         # Track candidate keypoints
             candidate_pts = self.S['C'].T  # Convert to Nx2 for tracking
             candidate_pts = candidate_pts.reshape(-1, 1, 2)  # Convert to Nx1x2 for calcOpticalFlowPyrLK
@@ -242,6 +253,7 @@ class Continuous_operation:
             self.S['F'] = self.S['F'][:, inlier_mask] if np.any(inlier_mask) else None
             self.S['T'] = self.S['T'][:, inlier_mask] if np.any(inlier_mask) else None
             self.S['R'] = candidate_pts.T if np.any(inlier_mask) else None
+
     def triangulate_new_landmarks(self,old_pts, next_pts, T, curr_frame):
         """
         Triangulate new landmarks from candidate keypoints and their tracks,
@@ -292,14 +304,15 @@ class Continuous_operation:
             max_distance_relaxed = 200.0
             max_distance_default = 100.0
             reproj_threshold = 4.0
+
         if self.S['DS']== 2: #Parameters for Malaga
-            min_keypoint_threshold = 20
-            angle_threshold_default = np.deg2rad(0.65)  # ~37 deg
-            angle_threshold_relaxed = np.deg2rad(0.24)  # ~14 deg
-            baseline_threshold = 5.0
-            max_distance_relaxed = 200.0
-            max_distance_default = 100.0
-            reproj_threshold = 4.0
+            min_keypoint_threshold = 0
+            angle_threshold_default = np.deg2rad(1)  # ~37 deg
+            angle_threshold_relaxed = np.deg2rad(1)  # ~14 deg
+            baseline_threshold = 1000.0
+            max_distance_relaxed = 100000.0
+            max_distance_default = 100000.0
+            reproj_threshold = 1000000.0
 
         if self.S['DS']== 3: #Parameters for parking
             min_keypoint_threshold = 5
@@ -315,6 +328,7 @@ class Continuous_operation:
         # 2) Detect if camera is "moving fast"
         # Example: compute baseline from last_pose
         # If you haven't stored a last_pose, you can store it at the end of this function.
+        
         is_fast_motion = False
         if getattr(self, 'last_pose', None) is not None:
             # last_pose is 4x4 or 3x4
@@ -323,13 +337,13 @@ class Continuous_operation:
             baseline = np.linalg.norm(cur_t - last_t)
             if baseline > baseline_threshold:  # example threshold5.0funktionniertgut
                 is_fast_motion = True
-                #print(f"Fast motion detected! baseline={baseline:.2f}m")
+                print(f"Fast motion detected! baseline={baseline:.2f}m")
 
         # Now we pick the angle threshold
         if current_keypoints_count < min_keypoint_threshold or is_fast_motion:
             angle_threshold = angle_threshold_relaxed
             max_distance = max_distance_relaxed  # allow more distant points
-            #print("Using relaxed angle threshold and distance.")
+            print("Using relaxed angle threshold and distance.")
         else:
             angle_threshold = angle_threshold_default
             max_distance = max_distance_default
@@ -400,7 +414,8 @@ class Continuous_operation:
             camera_center_world = T_inv[:3, 3]
             dists = np.linalg.norm(points_3d.T - camera_center_world, axis=1)
             in_range_mask = (dists < max_distance)
-            #print("Distance filter filtered out", np.sum(~in_range_mask), "points")
+            # if np.sum(~in_range_mask) > 10:
+            #     print("Distance filter filtered out", np.sum(~in_range_mask), "points")
             points_3d           = points_3d[:, in_range_mask]
             local_first_points  = local_first_points[in_range_mask]
             local_current_points= local_current_points[in_range_mask]
@@ -409,7 +424,8 @@ class Continuous_operation:
             # 4) Negative-depth removal
             if points_3d.shape[1] > 0:
                 z_neg_mask = (points_3d[2, :] < 0)
-                #print("Negative depth filter filtered out", np.sum(z_neg_mask), "points")
+                # if np.sum(z_neg_mask) > 0:
+                #     print("Negative depth filter filtered out", np.sum(z_neg_mask), "points")
                 if self.S['DS']== 0 or self.S['DS']==1 or self.S['DS']==2: #KITTI and Malaga
                     keep_z_pos = ~z_neg_mask
                     points_3d           = points_3d[:, keep_z_pos]
@@ -429,7 +445,8 @@ class Continuous_operation:
 
                 threshold = reproj_threshold
                 final_inliers = (error1 < threshold) & (error2 < threshold)
-                #print("Reprojection filter filtered out", np.sum(~final_inliers), "points")
+                if np.sum(~final_inliers) > 50:
+                    print("Reprojection filter filtered out", np.sum(~final_inliers), "points")
                 points_3d           = points_3d[:, final_inliers]
                 local_first_points  = local_first_points[final_inliers]
                 local_current_points= local_current_points[final_inliers]
@@ -450,6 +467,8 @@ class Continuous_operation:
                 mask_to_keep[local_candidate_indices] = False
 
             start_col += size
+
+        #print(f"Triangulated {new_landmarks.size} new landmarks!")
 
         # 7) Update global state
         if new_landmarks.size > 0:
@@ -490,22 +509,22 @@ class Continuous_operation:
         :param past_frame: Grayscale frame at time t-1
         :param curr_frame: Grayscale frame at time t
         """
-        # print("Number of keypoints before klt tracking:", self.S['P'].shape[1])
+        #print("Number of keypoints before klt tracking:", self.S['P'].shape[1])
         # Track keypoints PART 4.1 
         old_pts, next_pts, valid = self.klt_tracking(past_frame, curr_frame)
 
-        # print("Number of keypoints after klt tracking:", next_pts.shape[0])
+        #print("Number of keypoints after klt tracking:", next_pts.shape[0])
 
         # Estimate fundamental matrix
         F, inliers, next_pts, old_pts = self.ransac(next_pts, old_pts)
 
-        # print("Number of keypoints after RANSAC:", next_pts.shape[0])
+        #print("Number of keypoints after RANSAC:", next_pts.shape[0])
         # Estimate pose PART 4.2
         T, inliers, pose = self.pose_estimation_PnP_Ransac(next_pts)
         inliers = inliers.flatten()
 
         next_pts = next_pts[inliers]
-        # print("Number of keypoints after PnP:", next_pts.shape[0])
+        #print("Number of keypoints after PnP:", next_pts.shape[0])
         old_pts = old_pts[inliers]
         
         landmarks3D = self.S['X'][:, inliers]
@@ -522,16 +541,16 @@ class Continuous_operation:
 
             self.KLT_for_new_candidates(past_frame, curr_frame)
 
-        if self.S['C'] is not None:
-            print("Number of candidates after KLT for new candidates:", self.S['C'].shape[1])
+        # if self.S['C'] is not None:
+        #     print("Number of candidates after KLT for new candidates:", self.S['C'].shape[1])
 
         # Triangulate new landmarks
         #WICHTIG vor dem adden von neuen candidates zuerst traingulieren, mit den über mehrere Frames getrackten keypoints
 
         old_pts,next_pts = self.triangulate_new_landmarks(old_pts,next_pts, T, curr_frame)
 
-        if self.S['C'] is not None:
-            print("Number of keypoints after triangulation:", self.S['C'].shape[1])
+        # if self.S['C'] is not None:
+        #     print("Number of keypoints after triangulation:", self.S['C'].shape[1])
         # Monitor keypoint count
         if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
             if self.S['P'].shape[1] < 400 and (self.S['C'] is None or self.S['C'].shape[1] < 200):  # Threshold for the minimum number of keypoints
@@ -545,7 +564,11 @@ class Continuous_operation:
             if self.S['P'].shape[1] < 150 and (self.S['C'] is None or self.S['C'].shape[1] < 100):
                 self.add_new_candidates(curr_frame, T)
 
-        # print("Number of candidates after adding new candidates:", self.S['C'].shape[1])
+        # if self.S['C'] is not None:
+        #     print("Number of candidates after adding new candidates:", self.S['C'].shape[1])
+
+        #print(self.S['C'].shape[1] + self.S['P'].shape[1] if self.S['C'] is not None else self.S['P'].shape[1])
+        print(self.S['X'].shape[1] if self.S['X'] is not None else "No candidates!")
         
         
 

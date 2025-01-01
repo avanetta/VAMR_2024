@@ -19,7 +19,7 @@ def initialization(img1, img2, img3, ds,  self):
     elif ds == 2: #Malaga
         # Parameters
         number_matches = 1000
-        feature_params = dict(maxCorners=number_matches, qualityLevel=0.01, minDistance=10)
+        feature_params = dict(maxCorners=number_matches, qualityLevel=0.015, minDistance=15)
         lk_params = dict(winSize=(21, 21), maxLevel=3, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.1))
     elif ds == 3:#Parking
         # Parameters

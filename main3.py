@@ -18,7 +18,7 @@ from video_generator2 import plot_and_generate_video_2 #for Parking
 from video_generator3 import plot_and_generate_video_3 #for Malaga
 
 def main():
-    ds = 1 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
+    ds = 3 # 0: KITTI with given intialization, 1: KITTI with implemented initialization, 2: Malaga, 3: Parking
 
     if ds == 0:
         # KITTI dataset setup with given intialization
@@ -60,6 +60,7 @@ def main():
                       [0, 718.856, 185.2157],
                       [0, 0, 1]])
         
+        start_frame = 1
         last_frame = 2761
         initial_frame = cv2.imread(os.path.join(kitti_path, "05/image_0/000000.png"), cv2.IMREAD_GRAYSCALE)
 
@@ -92,6 +93,7 @@ def main():
                        for img in images[2::2]]
 
         # Get the last frame index
+        start_frame = 2
         last_frame = len(left_images)
         
         K = np.array([[621.18428, 0 ,404.0076],
@@ -100,8 +102,8 @@ def main():
         
         # Load the first three images
         img1 = cv2.imread(left_images[0], cv2.IMREAD_GRAYSCALE)
-        img2 = cv2.imread(left_images[1], cv2.IMREAD_GRAYSCALE)
-        img3 = cv2.imread(left_images[2], cv2.IMREAD_GRAYSCALE)
+        img2 = cv2.imread(left_images[2], cv2.IMREAD_GRAYSCALE)
+        img3 = cv2.imread(left_images[3], cv2.IMREAD_GRAYSCALE)
 
         # Since for MALAGA we are not given the poses, we directy extract the whole groundtruth
         # Initialize an empty list to store (x, y, z) tuples
@@ -145,6 +147,7 @@ def main():
                       [0, 369.568, 240],
                       [0, 0, 1]])
         initial_frame = cv2.imread(os.path.join(parking_path, "images/img_00000.png"), cv2.IMREAD_GRAYSCALE)
+        start_frame = 2
         last_frame = 599
 
         img1 = initial_frame
@@ -172,7 +175,7 @@ def main():
     #     img1 = initial_frame
     #     img2 = cv2.imread(os.path.join(kitti_path, "05/image_01/000001.png"), cv2.IMREAD_GRAYSCALE)
 
-    if continuous.S['DS'] == 3:
+    if continuous.S['DS'] == 3 or continuous.S['DS'] == 2:
         S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img3)
         continuous.plot_keypoints_and_displacements(img1, img3, old_pts, next_pts)
     else:
@@ -208,7 +211,7 @@ def main():
 
     #with Pool() as pool:
     # Start the loop from frame 2
-    for i in range(1, last_frame):
+    for i in range(start_frame, last_frame):
         # Load the next frame
         if ds == 0:
             img2 = cv2.imread(os.path.join(kitti_path, "05/image_0/{:06d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
@@ -219,7 +222,7 @@ def main():
         if ds == 3:
             img2 = cv2.imread(os.path.join(parking_path, "images/img_{:05d}.png".format(i)), cv2.IMREAD_GRAYSCALE)
         # Process the current frame to get tracked keypoints => Have a look at the "continuous operation" class
-        print("Processing Frame: ", i)
+        #print("Processing Frame: ", i)
         S, old_pts, next_pts, T, pose = continuous.process_frame(img1, img2)
         
         if continuous.S['DS'] == 3:
@@ -257,10 +260,11 @@ def main():
     #pool.close()
     #pool.join()
    
-
+    print(f"***********************END OF DATASET REACHED!**************************")
 
     video_writer.release()
     # Close the window after the loop ends
+    print(f"************************CLOSING ALL WINDOWS!****************************")
     cv2.destroyAllWindows()
     #"""
 
