@@ -19,6 +19,9 @@ class Continuous_operation:
 
         return normalized, mean, std_dev
     
+    #********************************************************************************************************
+    #******************************************TRACKING OF KEYPOINTS*****************************************
+    #********************************************************************************************************
     def klt_tracking(self, prev_frame, curr_frame):
         if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
             lk_params = dict(winSize=(11, 11), maxLevel=2,
@@ -58,7 +61,9 @@ class Continuous_operation:
 
         return old_pts, next_pts, valid 
 
-    # ADD RANSAC step to filter outliers:
+    #********************************************************************************************************
+    #********************************************RANSAC FILTERING********************************************
+    #********************************************************************************************************
     def ransac(self, next_pts, old_pts):
         #print("next_pts shape before RANSAC", next_pts.shape)
         #print("old_pts shape before RANSAC", old_pts.shape)
@@ -78,7 +83,9 @@ class Continuous_operation:
         return F, inlier_mask, next_pts, old_pts
     
 
-    # Adding a pos estimation function, consisting of PnP and RANSAC:
+    #********************************************************************************************************
+    #********************************************POSE ESTIMATION*********************************************
+    #********************************************************************************************************
     def pose_estimation_PnP_Ransac(self, next_pts):
 
         # PnP
@@ -102,9 +109,10 @@ class Continuous_operation:
 
         return T_actual, inliers, pose
     
-    # Alles drüber is für PART 4.2
-    # Hier DIE BAUSTELLE LEIDER NOCH NICHT FERTIG
 
+    #********************************************************************************************************
+    #*****************************************ADD NEW CANDIDATES*********************************************
+    #********************************************************************************************************
     def add_new_candidates(self, curr_frame, T):
         #print(f"ADDING NEW CANDIDATES")
         if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
@@ -112,13 +120,13 @@ class Continuous_operation:
             quality_level = 0.005
             min_distance = 15
         if self.S['DS']== 2: #Parameters for Malaga
-            max_corners = 1000
-            quality_level = 0.005
-            min_distance = 17
+            max_corners = 5000
+            quality_level = 0.01
+            min_distance = 20
         if self.S['DS']== 3: #Parameters for parking
             max_corners = 400
             quality_level = 0.0001
-            min_distance = 50
+            min_distance = 20
 
         new_keypoints = cv2.goodFeaturesToTrack(curr_frame, max_corners, quality_level, min_distance)
 
@@ -189,7 +197,9 @@ class Continuous_operation:
                         np.hstack((self.S['R'], kp.reshape(-1, 1))) if self.S['R'] is not None else kp.reshape(-1, 1)
                     )
 
-
+    #********************************************************************************************************
+    #************************************KEYPOINT TRACKING FOR CANDIDATES************************************
+    #********************************************************************************************************
     def KLT_for_new_candidates(self, past_frame, curr_frame):
             #print(f"KLT for new candidates")
         # Track candidate keypoints
@@ -232,6 +242,25 @@ class Continuous_operation:
 
                 tracked_pts = tracked_pts[flow_mask]
                 candidate_pts = candidate_pts[flow_mask]
+
+                if self.S['F'] is not None:
+                    self.S['F'] = self.S['F'][:, flow_mask] if np.any(flow_mask) else None
+                if self.S['T'] is not None:
+                    self.S['T'] = self.S['T'][:, flow_mask] if np.any(flow_mask) else None
+
+
+            if self.S['DS'] == 2:
+                # Compute displacement from candidate_pts -> tracked_pts
+                flow_vectors = tracked_pts - candidate_pts
+                flow_magnitudes = np.linalg.norm(flow_vectors, axis=1)
+                
+                # Threshold: if flow is smaller than, e.g., 1 pixel
+                # you might consider it "far away" (little parallax).
+                flow_threshold = 0.2
+                flow_mask = (flow_magnitudes >= flow_threshold)
+
+                tracked_pts = tracked_pts[flow_mask]
+                candidate_pts = candidate_pts[flow_mask]
                 
                 if self.S['F'] is not None:
                     self.S['F'] = self.S['F'][:, flow_mask] if np.any(flow_mask) else None
@@ -254,6 +283,9 @@ class Continuous_operation:
             self.S['T'] = self.S['T'][:, inlier_mask] if np.any(inlier_mask) else None
             self.S['R'] = candidate_pts.T if np.any(inlier_mask) else None
 
+    #********************************************************************************************************
+    #***************************************TRIANGULATE NEW LANDMARKS****************************************
+    #********************************************************************************************************
     def triangulate_new_landmarks(self,old_pts, next_pts, T, curr_frame):
         """
         Triangulate new landmarks from candidate keypoints and their tracks,
@@ -403,6 +435,8 @@ class Continuous_operation:
                 start_col += size
                 continue
 
+
+
             # 2) Triangulate
             points_4d = cv2.triangulatePoints(P1, P2,
                                             local_first_points.T,
@@ -502,29 +536,22 @@ class Continuous_operation:
         return old_pts,next_pts
 
     
-    # Final function to estimate pose and track keypoints
+    #********************************************************************************************************
+    #***************************************MAIN PROCESSING FUNCTION*****************************************
+    #********************************************************************************************************
     def process_frame(self, past_frame, curr_frame):
-        """
-        Process a frame to estimate pose and track keypoints.
-        :param past_frame: Grayscale frame at time t-1
-        :param curr_frame: Grayscale frame at time t
-        """
-        #print("Number of keypoints before klt tracking:", self.S['P'].shape[1])
-        # Track keypoints PART 4.1 
-        old_pts, next_pts, valid = self.klt_tracking(past_frame, curr_frame)
 
-        #print("Number of keypoints after klt tracking:", next_pts.shape[0])
+        #Track keypoints PART 4.1 ##########
+        old_pts, next_pts, valid = self.klt_tracking(past_frame, curr_frame)
 
         # Estimate fundamental matrix
         F, inliers, next_pts, old_pts = self.ransac(next_pts, old_pts)
 
-        #print("Number of keypoints after RANSAC:", next_pts.shape[0])
-        # Estimate pose PART 4.2
+        ############ Estimate pose PART 4.2 ##########
         T, inliers, pose = self.pose_estimation_PnP_Ransac(next_pts)
         inliers = inliers.flatten()
 
         next_pts = next_pts[inliers]
-        #print("Number of keypoints after PnP:", next_pts.shape[0])
         old_pts = old_pts[inliers]
         
         landmarks3D = self.S['X'][:, inliers]
@@ -532,27 +559,18 @@ class Continuous_operation:
         self.S['P'] = next_pts.T
 
 
-        # Add new Landmarks PART 4.3
-        # Ab hier wieder BAUSTELLE!!!!!!
-        # if self.S['C'] is not None:
-        #     print("Number of candidates before KLT for new candidates:", self.S['C'].shape[1])
-        # if self.S['C'] is not None and self.S['C'].shape[1] > 0:
+        ########### Add new landmarks PART 4.3 ##########
         if self.S['C'] is not None and self.S['C'].shape[1] > 0: # Threshold for the minimum number of candidates
 
+            # It is important to track the already existing candidates before triangulating new landmarks
             self.KLT_for_new_candidates(past_frame, curr_frame)
 
-        # if self.S['C'] is not None:
-        #     print("Number of candidates after KLT for new candidates:", self.S['C'].shape[1])
-
         # Triangulate new landmarks
-        #WICHTIG vor dem adden von neuen candidates zuerst traingulieren, mit den über mehrere Frames getrackten keypoints
-
         old_pts,next_pts = self.triangulate_new_landmarks(old_pts,next_pts, T, curr_frame)
 
-        # if self.S['C'] is not None:
-        #     print("Number of keypoints after triangulation:", self.S['C'].shape[1])
-        # Monitor keypoint count
-        if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
+        
+        ########### Add new candidates ##########
+        if self.S['DS']==1: #Parameters for KITTI
             if self.S['P'].shape[1] < 400 and (self.S['C'] is None or self.S['C'].shape[1] < 200):  # Threshold for the minimum number of keypoints
                 self.add_new_candidates(curr_frame, T)
 
@@ -563,14 +581,7 @@ class Continuous_operation:
         if self.S['DS']== 3: # Parameters for parking
             if self.S['P'].shape[1] < 150 and (self.S['C'] is None or self.S['C'].shape[1] < 100):
                 self.add_new_candidates(curr_frame, T)
-
-        # if self.S['C'] is not None:
-        #     print("Number of candidates after adding new candidates:", self.S['C'].shape[1])
-
-        #print(self.S['C'].shape[1] + self.S['P'].shape[1] if self.S['C'] is not None else self.S['P'].shape[1])
-        print(self.S['X'].shape[1] if self.S['X'] is not None else "No candidates!")
-        
-        
+           
 
         return self.S, old_pts, next_pts, T, pose
 
