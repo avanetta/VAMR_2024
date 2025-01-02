@@ -23,7 +23,7 @@ Parking     3
 
 You can create the conda environment using 
 
-conda env create --name <envname> --file=environments.yml
+conda env create --name <envname> --file=environment.yml
 
 and activate it with
 
