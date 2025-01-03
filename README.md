@@ -35,7 +35,7 @@ $ conda activate <envname>
 
 
 ## Running the code
-Make sure that you are running the code in the correct environment. Press "CTRL+SHIFT+P" and go to "Python: Select Interpreter". If not yet selected, click the previously created environment.
+Make sure that you are running the code in the correct environment. Press "CTRL+SHIFT+P" and go to "Python: Select Interpreter". If not yet selected, click the previously created environment `<envname>`.
 
 When the conda environment is active, proceed to the project folder in your console and enter
 
