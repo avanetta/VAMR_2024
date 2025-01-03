@@ -16,7 +16,7 @@ In order to run this code, the provided datasets "KITTI", "Malaga" and "Parking"
 
 The datasets are coupled with a value in the following manner:
 
-| dataset | ds-value |
+| Dataset | ds-value |
 | :---: |:---: |
 | KITTI | 1 |
 | Malaga | 2 |
