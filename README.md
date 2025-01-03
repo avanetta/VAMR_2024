@@ -1,7 +1,7 @@
 ### VAMR_2024
 Miniproject of course "Vision Algorithms in Mobile Robotics" by Prof. Scaramuzza, 2024
 
-This is the implementation done by Riccardo Romani, Matteo Stürm, Alessio Vanetta
+This system was implemented by [Riccardo Romani](https://github.com/riccardoromani1), [Matteo Stürm](https://github.com/mstuerm), [Alessio Vanetta](https://github.com/avanetta)
 
 
 ## Testing Environment
