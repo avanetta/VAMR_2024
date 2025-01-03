@@ -10,7 +10,7 @@ This code was tested in a conda environment running on Ubuntu 22.04.
 The system was tested on Ubuntu 22.04 using a conda environment. The hardware under which the script was run successfully consisted of a Lenovo Thinkpad X1 Yoga Gen 8 laptop with 12 Intel® Core™ i7-1355U processors of the 13th generation with 5 GHz of available Max Turbo Frequency and a Mesa Intel® Graphics (RPL-U) graphics card. 
 The script ran on 150% out of 1200% (12*100%) CPU power during the development of this system.
 
-Video recordings of the system working can be found [here](https://www.youtube.com/playlist?list=PLZFxFauWwBH2Q7nJYl93o3MuxaCO96Xxz)
+Video recordings of the system working can be found [here](https://www.youtube.com/playlist?list=PLZFxFauWwBH2Q7nJYl93o3MuxaCO96Xxz).
 
 
 ## Preparation
