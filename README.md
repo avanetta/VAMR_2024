@@ -46,3 +46,6 @@ python main3.py --ds <DS>
 where `<DS>` is the corresponding value of the dataset you want to run the VO pipeline on. The script also automatically saves the plot as video in "camera_trajectory_video.avi".
 
 You can stop the running script with keyboard input "q" in the plots or with "CTRL+C" in the console.
+
+## Comments
+During the development of this project, the full pipeline worked on the previously introduced hardware. Some additional tests were done on Windows using a different processor. In these tests, the performance of the system declined especially for the "KITTI" dataset.
