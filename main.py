@@ -6,11 +6,11 @@ import cv2
 from matplotlib import pyplot as plt
 plt.rcParams['figure.max_open_warning'] = 0
 
-from continous_operation_2 import Continuous_operation
-from initialization_2 import initialization
-from video_generator1 import plot_and_generate_video #for Kitti
-from video_generator2 import plot_and_generate_video_2 #for Parking
-from video_generator3 import plot_and_generate_video_3 #for Malaga
+from continous_operation import Continuous_operation
+from initialization import initialization
+from video_generator_kitti import plot_and_generate_video_kitti #for Kitti
+from video_generator_parking import plot_and_generate_video_parking #for Parking
+from video_generator_malaga import plot_and_generate_video_malaga #for Malaga
 
 
 def main(ds):
@@ -197,14 +197,14 @@ def main(ds):
                 pose[:3, 3] *= scaling_factor
 
         # Call the function to plot and generate video
-        if continuous.S['DS'] == 0 or continuous.S['DS'] == 1:
-            if not plot_and_generate_video(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, i, gt_matrices, gt_trajectory, keypoint_counter):
+        if continuous.S['DS'] == 1:
+            if not plot_and_generate_video_kitti(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, i, gt_matrices, gt_trajectory, keypoint_counter):
                 break
         if continuous.S['DS'] == 2:
-            if not plot_and_generate_video_3(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, i, gt_matrices, gt_trajectory, keypoint_counter):
+            if not plot_and_generate_video_malaga(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, i, gt_matrices, gt_trajectory, keypoint_counter):
                 break
         if continuous.S['DS'] == 3:
-            if not plot_and_generate_video_2(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, i, gt_matrices, gt_trajectory, keypoint_counter):
+            if not plot_and_generate_video_parking(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, i, gt_matrices, gt_trajectory, keypoint_counter):
                 break
 
         # Set the current frame as the previous frame for the next iteration

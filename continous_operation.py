@@ -12,6 +12,7 @@ class Continuous_operation:
         self.K = K
         self.S = {'P':None, 'X':None, 'C':None, 'F':None, 'T':None, 'R':None, 'DS':None}
     
+    # helper function
     def normalize_points(self, points):
         mean = np.mean(points, axis=0)
         std_dev = np.std(points, axis=0)
@@ -23,7 +24,7 @@ class Continuous_operation:
     #******************************************TRACKING OF KEYPOINTS*****************************************
     #********************************************************************************************************
     def klt_tracking(self, prev_frame, curr_frame):
-        if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
+        if self.S['DS']==1: #Parameters for KITTI
             lk_params = dict(winSize=(11, 11), maxLevel=2,
                             criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.1))
         if self.S['DS']== 2: #Parameters for Malaga
@@ -34,30 +35,17 @@ class Continuous_operation:
             lk_params = dict(winSize=(31, 31), maxLevel=3,
                             criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 0.03))
         
-        old_pts = self.S['P'].T #keypoints 577x2
+        old_pts = self.S['P'].T
         next_pts, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_frame, self.S['P'].T, None, **lk_params)
-        """
-          DEBUG HELP
-          
-        print("next_pts shape", next_pts.shape)
-        old_pts[:, [0,1]] = old_pts[:,[1,0]]
-        next_pts[:,[0, 1]]= next_pts[:,[1,0]]
-        self.plot_keypoints_and_displacements(prev_frame, curr_frame, old_pts, next_pts)
-
-        old_pts[:, [0,1]] = old_pts[:,[1,0]]
-        next_pts[:,[0,1]]= next_pts[:,[1,0]]
-        """
         valid = status.flatten()==1
 
         if np.all(valid == 0):
             print("The 'valid' array is an array of zeros.")
 
         self.S['X'] = self.S['X'][:, valid]
-        self.S['P'] = self.S['P'][:, valid] #landmarks
-        # self.S['P'] = next_pts[valid].T
+        self.S['P'] = self.S['P'][:, valid]
         old_pts = old_pts[valid]
         next_pts = next_pts[valid]
-
 
         return old_pts, next_pts, valid 
 
@@ -65,8 +53,6 @@ class Continuous_operation:
     #********************************************RANSAC FILTERING********************************************
     #********************************************************************************************************
     def ransac(self, next_pts, old_pts):
-        #print("next_pts shape before RANSAC", next_pts.shape)
-        #print("old_pts shape before RANSAC", old_pts.shape)
         
         F, inlier_mask = cv2.findFundamentalMat(old_pts, next_pts, cv2.FM_RANSAC, 1.0, 0.99)
         
@@ -77,8 +63,6 @@ class Continuous_operation:
         self.S['P'] = next_pts[inlier_mask].T
         next_pts = next_pts[inlier_mask]
         old_pts = old_pts[inlier_mask]
-        #print("next_pts shape after RANSAC", next_pts.shape)
-        #print("old_pts shape after RANSAC", old_pts.shape)
 
         return F, inlier_mask, next_pts, old_pts
     
@@ -90,12 +74,8 @@ class Continuous_operation:
 
         # PnP
         landmarks_3D = self.S['X'].T  # Retrieve current 3D landmarks
-  
-        # Hier ist was falsch, weil dtvec negative Depth hat!!! Wie kläre ich das? 
-        
         success, rvec, tvec, inliers = cv2.solvePnPRansac(landmarks_3D, next_pts, self.K, None) 
     
-
         # Convert rotation vector to rotation matrix
         R_actual, _ = cv2.Rodrigues(rvec)
 
@@ -103,7 +83,7 @@ class Continuous_operation:
         T_actual = np.eye(4)
         T_actual[:3, :3] = R_actual
         T_actual[:3, 3] = tvec.flatten()
-        # T_actual *= -1
+
         Camera_pose = np.hstack((R_actual.T, -R_actual.T @ tvec.reshape(-1, 1)))
         pose = Camera_pose
 
@@ -114,7 +94,7 @@ class Continuous_operation:
     #*****************************************ADD NEW CANDIDATES*********************************************
     #********************************************************************************************************
     def add_new_candidates(self, curr_frame, T):
-        #print(f"ADDING NEW CANDIDATES")
+
         if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
             max_corners = 2000
             quality_level = 0.005
@@ -130,55 +110,33 @@ class Continuous_operation:
 
         new_keypoints = cv2.goodFeaturesToTrack(curr_frame, max_corners, quality_level, min_distance)
 
-        #(f"Found {len(new_keypoints)} new keypoints!")
-
         if new_keypoints is not None:
-            new_keypoints = np.squeeze(new_keypoints, axis=1)  # Convert to Nx2 array
+            new_keypoints = np.squeeze(new_keypoints, axis=1)
            
             # Filter overlapping keypoints
-            current_keypoints = self.S['P'].T  # Existing keypoints
+            current_keypoints = self.S['P'].T
             valid_new_keypoints = []
             for kp in new_keypoints:
                 distances = np.linalg.norm(current_keypoints - kp, axis=1)
 
                 if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
-                    if np.min(distances) > 10:  # Minimum distance threshold
+                    if np.min(distances) > 10:
                         valid_new_keypoints.append(kp)
 
                 if self.S['DS']== 2: #Parameters for Malaga
-                    if np.min(distances) > 10:  # Minimum distance threshold
+                    if np.min(distances) > 10:
                         valid_new_keypoints.append(kp)
 
                 if self.S['DS']== 3: #Parameters for parking
-                    if np.min(distances) > 30:  # Minimum distance threshold
+                    if np.min(distances) > 30:
                         valid_new_keypoints.append(kp)
 
 
             new_keypoints = np.array(valid_new_keypoints)
             
-            # print(f"Found {new_keypoints.size} new keypoints.")
 
             # Add valid new keypoints to candidates
             if new_keypoints.size > 0:
-                # Convert new keypoints to float32 for tracking
-                #new_keypoints = new_keypoints.astype(np.float32).reshape(-1, 1, 2)
-                
-                """
-                # Perform KLT tracking for new keypoints
-                tracked_pts, status, _ = cv2.calcOpticalFlowPyrLK(curr_frame, curr_frame, new_keypoints, None)
-                valid = status.flatten() == 1
-                tracked_pts = tracked_pts[valid]
-                new_keypoints = new_keypoints[valid]
-
-                # Perform RANSAC on the tracked keypoints
-                if len(tracked_pts) >= 8:  # Minimum points for RANSAC
-                    F, inlier_mask = cv2.findFundamentalMat(new_keypoints, tracked_pts, cv2.FM_RANSAC, 1.0, 0.99)
-                    inlier_mask = inlier_mask.flatten() == 1
-                    tracked_pts = tracked_pts[inlier_mask]
-                    new_keypoints = new_keypoints[inlier_mask]
-                """
-                # Update candidates after RANSAC
-                # for kp in tracked_pts:
                 for kp in new_keypoints:
                     self.S['C'] = (
                         np.hstack((self.S['C'], kp.reshape(-1, 1))) if self.S['C'] is not None else kp.reshape(-1, 1)
@@ -201,96 +159,93 @@ class Continuous_operation:
     #************************************KEYPOINT TRACKING FOR CANDIDATES************************************
     #********************************************************************************************************
     def KLT_for_new_candidates(self, past_frame, curr_frame):
-            #print(f"KLT for new candidates")
         # Track candidate keypoints
-            candidate_pts = self.S['C'].T  # Convert to Nx2 for tracking
-            candidate_pts = candidate_pts.reshape(-1, 1, 2)  # Convert to Nx1x2 for calcOpticalFlowPyrLK
-            if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
-                lk_params = dict(winSize=(21,21), maxLevel=3,
-                         criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 0.01))
-            if self.S['DS']== 2: #Parameters for Malaga
-                lk_params = dict(winSize=(21,21), maxLevel=3,
-                            criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 0.01))
-            if self.S['DS']== 3: #Parameters for parking
-                lk_params = dict(winSize=(31,31), maxLevel=3,
-                         criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 0.01))
-            tracked_pts, status, _ = cv2.calcOpticalFlowPyrLK(past_frame, curr_frame, candidate_pts, None, **lk_params)
+        candidate_pts = self.S['C'].T
+        candidate_pts = candidate_pts.reshape(-1, 1, 2)
+
+        if self.S['DS']==1: #Parameters for KITTI
+            lk_params = dict(winSize=(21,21), maxLevel=3,
+                        criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 0.01))
+        if self.S['DS']== 2: #Parameters for Malaga
+            lk_params = dict(winSize=(21,21), maxLevel=3,
+                        criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 0.01))
+        if self.S['DS']== 3: #Parameters for parking
+            lk_params = dict(winSize=(31,31), maxLevel=3,
+                        criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 0.01))
+
+        tracked_pts, status, _ = cv2.calcOpticalFlowPyrLK(past_frame, curr_frame, candidate_pts, None, **lk_params)
+        
+        # Keep only successfully tracked candidates
+        valid = status.flatten() == 1
+        tracked_pts = tracked_pts[valid]
+        candidate_pts = candidate_pts[valid]
+
+        self.S['F'] = self.S['F'][:, valid] if np.any(valid) else None
+        self.S['T'] = self.S['T'][:, valid] if np.any(valid) else None
+        
+        tracked_pts = tracked_pts.reshape(-1, 2)
+        candidate_pts = candidate_pts.reshape(-1, 2)
+
+        # (A) Optional: Filter Out Insufficient Flow for DS=3 (parking):
+        # ------------------------------------------------------------------
+        if self.S['DS'] == 3:
+            # Compute displacement from candidate_pts -> tracked_pts
+            flow_vectors = tracked_pts - candidate_pts
+            flow_magnitudes = np.linalg.norm(flow_vectors, axis=1)
             
-            # Keep only successfully tracked candidates
-            valid = status.flatten() == 1
-            tracked_pts = tracked_pts[valid]
-            candidate_pts = candidate_pts[valid] # Important for Tracking!
+            # Threshold: if flow is smaller than, e.g., 1 pixel
+            # you might consider it "far away" (little parallax).
+            flow_threshold = 0
+            flow_mask = (flow_magnitudes >= flow_threshold)
 
-            self.S['F'] = self.S['F'][:, valid] if np.any(valid) else None
-            self.S['T'] = self.S['T'][:, valid] if np.any(valid) else None
+            tracked_pts = tracked_pts[flow_mask]
+            candidate_pts = candidate_pts[flow_mask]
+
+            if self.S['F'] is not None:
+                self.S['F'] = self.S['F'][:, flow_mask] if np.any(flow_mask) else None
+            if self.S['T'] is not None:
+                self.S['T'] = self.S['T'][:, flow_mask] if np.any(flow_mask) else None
+
+
+        if self.S['DS'] == 2:
+            # Compute displacement from candidate_pts -> tracked_pts
+            flow_vectors = tracked_pts - candidate_pts
+            flow_magnitudes = np.linalg.norm(flow_vectors, axis=1)
             
-            tracked_pts = tracked_pts.reshape(-1, 2) # Convert to Nx2 array
-            candidate_pts = candidate_pts.reshape(-1, 2) # Convert to Nx2 array
+            # Threshold: if flow is smaller than, e.g., 1 pixel
+            # you might consider it "far away" (little parallax).
+            flow_threshold = 0.2
+            flow_mask = (flow_magnitudes >= flow_threshold)
 
-            # (A) Optional: Filter Out Insufficient Flow for DS=3 (parking):
-            # Only do this if you're sure you want to discard points with too little motion.
-            # ------------------------------------------------------------------
-            if self.S['DS'] == 3:
-                # Compute displacement from candidate_pts -> tracked_pts
-                flow_vectors = tracked_pts - candidate_pts
-                flow_magnitudes = np.linalg.norm(flow_vectors, axis=1)
-                
-                # Threshold: if flow is smaller than, e.g., 1 pixel
-                # you might consider it "far away" (little parallax).
-                flow_threshold = 0
-                flow_mask = (flow_magnitudes >= flow_threshold)
-
-                tracked_pts = tracked_pts[flow_mask]
-                candidate_pts = candidate_pts[flow_mask]
-
-                if self.S['F'] is not None:
-                    self.S['F'] = self.S['F'][:, flow_mask] if np.any(flow_mask) else None
-                if self.S['T'] is not None:
-                    self.S['T'] = self.S['T'][:, flow_mask] if np.any(flow_mask) else None
+            tracked_pts = tracked_pts[flow_mask]
+            candidate_pts = candidate_pts[flow_mask]
+            
+            if self.S['F'] is not None:
+                self.S['F'] = self.S['F'][:, flow_mask] if np.any(flow_mask) else None
+            if self.S['T'] is not None:
+                self.S['T'] = self.S['T'][:, flow_mask] if np.any(flow_mask) else None
 
 
-            if self.S['DS'] == 2:
-                # Compute displacement from candidate_pts -> tracked_pts
-                flow_vectors = tracked_pts - candidate_pts
-                flow_magnitudes = np.linalg.norm(flow_vectors, axis=1)
-                
-                # Threshold: if flow is smaller than, e.g., 1 pixel
-                # you might consider it "far away" (little parallax).
-                flow_threshold = 0.2
-                flow_mask = (flow_magnitudes >= flow_threshold)
+        # Perform RANSAC on the tracked keypoints
+        if len(tracked_pts) >= 8:  # Minimum points for RANSAC
+            F, inlier_mask = cv2.findFundamentalMat(candidate_pts, tracked_pts, cv2.FM_RANSAC, 1.0, 0.99)
+            inlier_mask = inlier_mask.flatten() == 1
+            tracked_pts = tracked_pts[inlier_mask]
+            candidate_pts = candidate_pts[inlier_mask]
+        else:
+            inlier_mask = np.zeros(tracked_pts.shape[0], dtype=bool)
 
-                tracked_pts = tracked_pts[flow_mask]
-                candidate_pts = candidate_pts[flow_mask]
-                
-                if self.S['F'] is not None:
-                    self.S['F'] = self.S['F'][:, flow_mask] if np.any(flow_mask) else None
-                if self.S['T'] is not None:
-                    self.S['T'] = self.S['T'][:, flow_mask] if np.any(flow_mask) else None
-
-
-             # Perform RANSAC on the tracked keypoints
-            if len(tracked_pts) >= 8:  # Minimum points for RANSAC
-                F, inlier_mask = cv2.findFundamentalMat(candidate_pts, tracked_pts, cv2.FM_RANSAC, 1.0, 0.99)
-                inlier_mask = inlier_mask.flatten() == 1
-                tracked_pts = tracked_pts[inlier_mask]
-                candidate_pts = candidate_pts[inlier_mask]
-            else:
-                inlier_mask = np.zeros(tracked_pts.shape[0], dtype=bool)
-            # new_F = self.S['F'][:, inlier_mask] if np.any(inlier_mask) else None
-            # new_T = self.S['T'][:, inlier_mask] if np.any(inlier_mask) else None
-            self.S['C'] = tracked_pts.T if np.any(inlier_mask) else None
-            self.S['F'] = self.S['F'][:, inlier_mask] if np.any(inlier_mask) else None
-            self.S['T'] = self.S['T'][:, inlier_mask] if np.any(inlier_mask) else None
-            self.S['R'] = candidate_pts.T if np.any(inlier_mask) else None
+        
+        self.S['C'] = tracked_pts.T if np.any(inlier_mask) else None
+        self.S['F'] = self.S['F'][:, inlier_mask] if np.any(inlier_mask) else None
+        self.S['T'] = self.S['T'][:, inlier_mask] if np.any(inlier_mask) else None
+        self.S['R'] = candidate_pts.T if np.any(inlier_mask) else None
 
     #********************************************************************************************************
     #***************************************TRIANGULATE NEW LANDMARKS****************************************
     #********************************************************************************************************
     def triangulate_new_landmarks(self,old_pts, next_pts, T, curr_frame):
-        """
-        Triangulate new landmarks from candidate keypoints and their tracks,
-        removing from the candidate set only after *all* filters are applied.
-        """
+
         if self.S['C'] is None or self.S['C'].shape[1] == 0:
             return old_pts,next_pts
 
@@ -316,19 +271,18 @@ class Continuous_operation:
             start_col += count
 
         # Current camera pose
-        current_pose = T  # world->camera or camera->world depending on your convention
+        current_pose = T
         R_curr = current_pose[:3, :3]
         R_vec_cur = cv2.Rodrigues(R_curr)[0]
         T_vec_cur = current_pose[:3, 3]
         P2 = self.K @ current_pose[:3, :]
         
+
+        # DYNAMIC ADAPTATION for speed/distance
         # ------------------------------------------------------------
-        # ------------------------------------------------------------
-        # DYNAMIC ADAPTATION for speed/distance/CHANGEHEREE
-        # ------------------------------------------------------------
-        # ------------------------------------------------------------
+
         # 1) Angle threshold logic
-        if self.S['DS']== 0 or self.S['DS']==1: #Parameters for KITTI
+        if self.S['DS']==1: #Parameters for KITTI
             min_keypoint_threshold = 20 
             angle_threshold_default = np.deg2rad(0.65)  # ~37 deg
             angle_threshold_relaxed = np.deg2rad(0.24)  # ~14 deg
@@ -358,24 +312,21 @@ class Continuous_operation:
         current_keypoints_count = self.S['P'].shape[1] if self.S['P'] is not None else 0
 
         # 2) Detect if camera is "moving fast"
-        # Example: compute baseline from last_pose
-        # If you haven't stored a last_pose, you can store it at the end of this function.
-        
         is_fast_motion = False
-        if getattr(self, 'last_pose', None) is not None:
+        if getattr(self, 'last_pose', None) is not None: #get last pose
             # last_pose is 4x4 or 3x4
             last_t = self.last_pose[:3, 3]
             cur_t  = current_pose[:3, 3]
             baseline = np.linalg.norm(cur_t - last_t)
-            if baseline > baseline_threshold:  # example threshold5.0funktionniertgut
+            if baseline > baseline_threshold:
                 is_fast_motion = True
-                print(f"Fast motion detected! baseline={baseline:.2f}m")
+                # print(f"Fast motion detected! baseline={baseline:.2f}m")
 
         # Now we pick the angle threshold
         if current_keypoints_count < min_keypoint_threshold or is_fast_motion:
             angle_threshold = angle_threshold_relaxed
             max_distance = max_distance_relaxed  # allow more distant points
-            print("Using relaxed angle threshold and distance.")
+            # print("Using relaxed angle threshold and distance.")
         else:
             angle_threshold = angle_threshold_default
             max_distance = max_distance_default
@@ -430,14 +381,11 @@ class Continuous_operation:
             local_first_points      = np.array(local_first_points)
             local_current_points    = np.array(local_current_points)
 
-            #print(f"Group {start_col} has {local_candidate_indices.size} points after angle threshold from {size}")
             if local_first_points.size == 0:
                 start_col += size
                 continue
 
-
-
-            # 2) Triangulate
+            # Triangulate
             points_4d = cv2.triangulatePoints(P1, P2,
                                             local_first_points.T,
                                             local_current_points.T)
@@ -448,8 +396,7 @@ class Continuous_operation:
             camera_center_world = T_inv[:3, 3]
             dists = np.linalg.norm(points_3d.T - camera_center_world, axis=1)
             in_range_mask = (dists < max_distance)
-            # if np.sum(~in_range_mask) > 10:
-            #     print("Distance filter filtered out", np.sum(~in_range_mask), "points")
+
             points_3d           = points_3d[:, in_range_mask]
             local_first_points  = local_first_points[in_range_mask]
             local_current_points= local_current_points[in_range_mask]
@@ -458,16 +405,14 @@ class Continuous_operation:
             # 4) Negative-depth removal
             if points_3d.shape[1] > 0:
                 z_neg_mask = (points_3d[2, :] < 0)
-                # if np.sum(z_neg_mask) > 0:
-                #     print("Negative depth filter filtered out", np.sum(z_neg_mask), "points")
+
                 if self.S['DS']== 0 or self.S['DS']==1 or self.S['DS']==2: #KITTI and Malaga
                     keep_z_pos = ~z_neg_mask
                     points_3d           = points_3d[:, keep_z_pos]
                     local_first_points  = local_first_points[keep_z_pos]
                     local_current_points= local_current_points[keep_z_pos]
                     local_candidate_indices = local_candidate_indices[keep_z_pos]
-                # if self.S['DS']== 3: #Parking
-                #     points_3d[:, z_neg_mask] = -points_3d[:, z_neg_mask]
+
 
             # 5) Reprojection filter
             if REJECT_ERRORS and points_3d.shape[1] > 0:
@@ -479,14 +424,16 @@ class Continuous_operation:
 
                 threshold = reproj_threshold
                 final_inliers = (error1 < threshold) & (error2 < threshold)
-                if np.sum(~final_inliers) > 50:
-                    print("Reprojection filter filtered out", np.sum(~final_inliers), "points")
+                
+               
+                # print("Reprojection filter filtered out", np.sum(~final_inliers), "points")
+                
                 points_3d           = points_3d[:, final_inliers]
                 local_first_points  = local_first_points[final_inliers]
                 local_current_points= local_current_points[final_inliers]
                 local_candidate_indices = local_candidate_indices[final_inliers]
 
-            # 6) If points remain, add them
+            # If points remain, add them
             if points_3d.shape[1] > 0:
                 if new_landmarks.size == 0:
                     new_landmarks = points_3d
@@ -501,8 +448,6 @@ class Continuous_operation:
                 mask_to_keep[local_candidate_indices] = False
 
             start_col += size
-
-        #print(f"Triangulated {new_landmarks.size} new landmarks!")
 
         # 7) Update global state
         if new_landmarks.size > 0:
@@ -524,6 +469,7 @@ class Continuous_operation:
                 old_pts = np.vstack((old_pts, new_keypoints.T))
             else:
                 old_pts = new_keypoints.T
+
         # 8) Remove used
         self.S['C'] = self.S['C'][:, mask_to_keep]
         self.S['F'] = self.S['F'][:, mask_to_keep]

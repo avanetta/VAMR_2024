@@ -100,6 +100,5 @@ def initialization(img1, img2, img3, ds,  self):
         matches_mask = None
         raise ValueError("Not enough source_points")
     
-    np.savetxt('points_3d.txt', points_3D.T, fmt='%.6f', delimiter=' ')
 
     return keypoints.T, points_3D

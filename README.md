@@ -42,7 +42,7 @@ Make sure that you are running the code in the correct environment. Press "CTRL+
 When the conda environment is active, proceed to the project folder in your console and enter
 
 ```bash
-python main3.py --ds <DS>
+python main.py --ds <DS>
 ```
 
 where `<DS>` is the corresponding value of the dataset you want to run the VO pipeline on. The script also automatically saves the plot as video in "camera_trajectory_video.avi".

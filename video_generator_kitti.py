@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 
 def fill_traj_full_canvas(traj_full_canvas, continuous, pose, frame_index, camera_trajectory, gt_matrices, gt_trajectory):
+    
     # Extract landmarks and camera trajectory
     landmarks_3D = continuous.S['X']
     camera_position = pose[:3, 3]
@@ -12,18 +13,18 @@ def fill_traj_full_canvas(traj_full_canvas, continuous, pose, frame_index, camer
     gt_trajectory.append((x_gt, z_gt))
     
     # Scale and shift for visualization
-    scale = 3.0
-    x_shift, z_shift = 100, 100
+    scale = 1.
+    x_shift, z_shift = 400, 400
 
     # Draw grid lines
-    for grid_x in range(-50, 151, 10):
+    for grid_x in range(-300, 350, 10):
         x_plot = int((grid_x + x_shift) * scale)
         cv2.line(traj_full_canvas, (x_plot, 0), (x_plot, traj_full_canvas.shape[0]), (200, 200, 200), 1)
         if grid_x % 50 == 0:
             cv2.putText(traj_full_canvas, f"{grid_x}", (x_plot - 15, traj_full_canvas.shape[0] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1)
 
-    for grid_z in range(-50, 60, 10):
+    for grid_z in range(-100, 350, 10):
         z_plot = int((z_shift - grid_z) * scale)
         cv2.line(traj_full_canvas, (0, z_plot), (traj_full_canvas.shape[1]-450, z_plot), (200, 200, 200), 1)
         if grid_z % 50 == 0:
@@ -43,16 +44,16 @@ def fill_traj_full_canvas(traj_full_canvas, continuous, pose, frame_index, camer
 
     # Plot the GT position
     x_plot_gt = int((x_gt + x_shift) * scale)
-    z_plot_gt = int((z_shift - z_gt) * scale)  # Invert z-axis
-    cv2.circle(traj_full_canvas, (x_plot_gt, z_plot_gt), 4, (255, 255, 0), -1) #Magenta point for groundtruth
+    z_plot_gt = int((z_shift - z_gt) * scale)
+    cv2.circle(traj_full_canvas, (x_plot_gt, z_plot_gt), 4, (255, 255, 0), -1)  # Magenta point for the camera
 
     # Plot the ground truth trajectory
     if len(gt_trajectory) > 2:
         for i in range(2, len(gt_trajectory)):
             x1_gt, z1_gt = gt_trajectory[i - 1]
             x2_gt, z2_gt = gt_trajectory[i]
-            x1_gt_plot, z1_gt_plot = int((x1_gt + x_shift) * scale), int((z_shift - z1_gt) * scale)  # Invert z-axis
-            x2_gt_plot, z2_gt_plot = int((x2_gt + x_shift) * scale), int((z_shift - z2_gt) * scale)  # Invert z-axis
+            x1_gt_plot, z1_gt_plot = int((x1_gt + x_shift) * scale), int((z_shift - z1_gt) * scale)
+            x2_gt_plot, z2_gt_plot = int((x2_gt + x_shift) * scale), int((z_shift - z2_gt) * scale)
             cv2.line(traj_full_canvas, (x1_gt_plot, z1_gt_plot), (x2_gt_plot, z2_gt_plot), (255, 255, 0), 2)  # Magenta line
 
     # Plot the trajectory
@@ -62,7 +63,7 @@ def fill_traj_full_canvas(traj_full_canvas, continuous, pose, frame_index, camer
             x2, z2 = camera_trajectory[i]
             x1_plot, z1_plot = int((x1 + x_shift) * scale), int((z_shift - z1) * scale)
             x2_plot, z2_plot = int((x2 + x_shift) * scale), int((z_shift - z2) * scale)
-            cv2.line(traj_full_canvas, (x1_plot, z1_plot), (x2_plot, z2_plot), (255, 0, 255), 2) # Cyan Line
+            cv2.line(traj_full_canvas, (x1_plot, z1_plot), (x2_plot, z2_plot), (255, 0, 255), 2) # Cyan line
     
 
     # Add title, labels, and legends
@@ -131,14 +132,14 @@ def fill_traj_short_canvas(traj_short_canvas, continuous, pose, frame_index, cam
     gt_trajectory.append((x_gt, z_gt))
 
     # Scale and shift for visualization
-    scale = 7.0
+    scale = 5.0
 
     # Determine the reference point for centering
     reference_index = max(0, len(camera_trajectory) - 50)
     x_ref, z_ref = camera_trajectory[reference_index]
 
     # Add the plot shift to the reference point
-    shift_x, shift_z = (-2400, -1350)
+    shift_x, shift_z = (-1600, -900)
 
     # Align ground truth trajectory with camera trajectory
     if len(camera_trajectory) >= 50 and len(gt_trajectory) >= 50:
@@ -153,8 +154,8 @@ def fill_traj_short_canvas(traj_short_canvas, continuous, pose, frame_index, cam
         aligned_gt_trajectory = gt_trajectory
 
     # Adjust grid ranges based on the reference point
-    x_min, x_max = x_ref - 20, x_ref + 20
-    z_min, z_max = z_ref - 20, z_ref + 20
+    x_min, x_max = x_ref - 30, x_ref + 30
+    z_min, z_max = z_ref - 30, z_ref + 30
 
     # Draw grid lines
     for grid_x in range(int(x_min), int(x_max), 1):
@@ -198,7 +199,7 @@ def fill_traj_short_canvas(traj_short_canvas, continuous, pose, frame_index, cam
     cv2.putText(traj_short_canvas, f"Frame: {frame_index}", (10, 45), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
     cv2.putText(traj_short_canvas, "X-axis", (traj_short_canvas.shape[1] - 250, traj_short_canvas.shape[0] - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
-    cv2.putText(traj_short_canvas, "Z-axis", (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+    cv2.putText(traj_short_canvas, "Z-axis", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
 
     return traj_short_canvas
 
@@ -222,8 +223,9 @@ def fill_keypoints_number_canvas(keypoints_number_canvas, continuous, keypoint_c
     plot_height = height - 2 * margin_height
 
     # Define grid ranges
-    y_min, y_max = 0, 350
+    y_min, y_max = 0, 1100
     x_min, x_max = -49, 0
+
 
     # Draw gridlines and labels
     num_horizontal_lines = 5
@@ -270,7 +272,7 @@ def fill_keypoints_number_canvas(keypoints_number_canvas, continuous, keypoint_c
 
     return keypoints_number_canvas
 
-def plot_and_generate_video_2(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, frame_index, gt_matrices, gt_trajectory, keypoint_counter):
+def plot_and_generate_video_kitti(continuous, pose, camera_trajectory, img2, next_pts, old_pts, video_writer, frame_index, gt_matrices, gt_trajectory, keypoint_counter):
     # Create a canvas for the recent trajectory plot
     traj_short_canvas = np.ones((450, 800, 3), dtype=np.uint8) * 255
     traj_short_canvas = fill_traj_short_canvas(traj_short_canvas, continuous, pose, frame_index, camera_trajectory, gt_matrices, gt_trajectory)
@@ -297,10 +299,10 @@ def plot_and_generate_video_2(continuous, pose, camera_trajectory, img2, next_pt
     # Combine right canvases
     combined_height_right = keypoints_img_canvas.shape[0] + traj_full_canvas.shape[0] + 40
     combined_canvas_right = np.zeros((combined_height_right, max(keypoints_img_canvas.shape[1], traj_full_canvas.shape[1]), 3), dtype=np.uint8)
-    combined_canvas_right[ 20:20 + keypoints_img_canvas.shape[0],300:300+keypoints_img_canvas.shape[1]] = keypoints_img_canvas
+    combined_canvas_right[ 20:20 + keypoints_img_canvas.shape[0],:keypoints_img_canvas.shape[1]] = keypoints_img_canvas
     combined_canvas_right[keypoints_img_canvas.shape[0] + 40:, :traj_full_canvas.shape[1]] = traj_full_canvas
 
-
+    
     # Combine both canvases side by side
     combined_width = combined_canvas_left.shape[1] + combined_canvas_right.shape[1] + 40
     combined_canvas = np.zeros((max(combined_canvas_left.shape[0], combined_canvas_right.shape[0]), combined_width, 3), dtype=np.uint8)
